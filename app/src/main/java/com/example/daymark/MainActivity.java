@@ -28,6 +28,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private Button todoButton;
     private Button doneTodayButton;
     private int filterMode = 0;
+    private long userId = DayMarkDbHelper.NO_USER;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,16 +52,35 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         doneTodayButton = findViewById(R.id.doneTodayButton);
 
         String username = getIntent().getStringExtra("username");
+        userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
+        if (userId == DayMarkDbHelper.NO_USER) {
+            // No valid session (e.g. launched without logging in); send back to login.
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
         welcomeText.setText(username == null ? "我的打卡" : username + " 的打卡");
         habitList.setAdapter(adapter);
 
-        addButton.setOnClickListener(v -> startActivity(new Intent(this, EditHabitActivity.class)));
+        addButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, EditHabitActivity.class);
+            intent.putExtra("user_id", userId);
+            startActivity(intent);
+        });
         logoutButton.setOnClickListener(v -> {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
         });
-        calendarButton.setOnClickListener(v -> startActivity(new Intent(this, CalendarActivity.class)));
-        statsButton.setOnClickListener(v -> startActivity(new Intent(this, StatsActivity.class)));
+        calendarButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, CalendarActivity.class);
+            intent.putExtra("user_id", userId);
+            startActivity(intent);
+        });
+        statsButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, StatsActivity.class);
+            intent.putExtra("user_id", userId);
+            startActivity(intent);
+        });
         exportButton.setOnClickListener(v -> exportReport());
 
         allButton.setOnClickListener(v -> setFilterMode(0));
@@ -113,10 +133,10 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
 
     private void refresh() {
         String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
-        List<Habit> habits = dbHelper.searchHabits(keyword, filterMode);
+        List<Habit> habits = dbHelper.searchHabits(keyword, filterMode, userId);
         adapter.submitList(habits);
 
-        List<Habit> allHabits = dbHelper.getAllHabits();
+        List<Habit> allHabits = dbHelper.getAllHabits(userId);
         int totalChecks = 0;
         int completedToday = 0;
         int bestStreak = 0;
@@ -143,7 +163,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         }
         File file = new File(dir, "DayMark_export_" + System.currentTimeMillis() + ".txt");
         try (FileOutputStream outputStream = new FileOutputStream(file)) {
-            outputStream.write(dbHelper.buildExportText().getBytes(StandardCharsets.UTF_8));
+            outputStream.write(dbHelper.buildExportText(userId).getBytes(StandardCharsets.UTF_8));
             Toast.makeText(this, "已导出：" + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
         } catch (IOException e) {
             Toast.makeText(this, "导出失败", Toast.LENGTH_SHORT).show();

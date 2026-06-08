@@ -55,9 +55,11 @@ public class LoginActivity extends Activity {
         if (!validate(username, password)) {
             return;
         }
-        if (dbHelper.login(username, password)) {
+        long userId = dbHelper.login(username, password);
+        if (userId != DayMarkDbHelper.NO_USER) {
             saveRememberState(username, password);
             Intent intent = new Intent(this, MainActivity.class);
+            intent.putExtra("user_id", userId);
             intent.putExtra("username", username);
             startActivity(intent);
             finish();
@@ -72,7 +74,7 @@ public class LoginActivity extends Activity {
         if (!validate(username, password)) {
             return;
         }
-        if (dbHelper.register(username, password)) {
+        if (dbHelper.register(username, password) != DayMarkDbHelper.NO_USER) {
             Toast.makeText(this, "注册成功，请登录", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, "用户名已存在", Toast.LENGTH_SHORT).show();

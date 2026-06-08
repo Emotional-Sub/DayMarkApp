@@ -15,12 +15,13 @@ public class StatsActivity extends Activity {
         setContentView(R.layout.activity_stats);
 
         DayMarkDbHelper dbHelper = new DayMarkDbHelper(this);
+        long userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
         TextView overviewText = findViewById(R.id.overviewText);
         TextView weekText = findViewById(R.id.weekText);
         Button backButton = findViewById(R.id.backButton);
 
-        List<Habit> habits = dbHelper.getAllHabits();
-        int totalChecks = dbHelper.getTotalRecordCount();
+        List<Habit> habits = dbHelper.getAllHabits(userId);
+        int totalChecks = dbHelper.getTotalRecordCount(userId);
         int bestStreak = 0;
         int completedToday = 0;
         for (Habit habit : habits) {
@@ -32,8 +33,8 @@ public class StatsActivity extends Activity {
 
         overviewText.setText(String.format(Locale.CHINA,
                 "总事件数：%d\n今日已完成：%d\n总打卡记录：%d\n今日完成率：%.1f%%\n最高连续打卡：%d 天",
-                habits.size(), completedToday, totalChecks, dbHelper.getCompletionRateToday(), bestStreak));
-        weekText.setText(dbHelper.buildWeekSummary());
+                habits.size(), completedToday, totalChecks, dbHelper.getCompletionRateToday(userId), bestStreak));
+        weekText.setText(dbHelper.buildWeekSummary(userId));
         backButton.setOnClickListener(v -> finish());
     }
 }

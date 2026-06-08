@@ -3,6 +3,7 @@ package com.example.daymark;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.text.TextUtils;
@@ -15,7 +16,10 @@ import java.util.Set;
 
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 3;
+
+    /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
+    public static final long NO_USER = -1;
 
     public DayMarkDbHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
@@ -29,6 +33,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 "password TEXT NOT NULL)");
         db.execSQL("CREATE TABLE habits (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "user_id INTEGER NOT NULL DEFAULT 1," +
                 "title TEXT NOT NULL," +
                 "content TEXT NOT NULL," +
                 "time_text TEXT NOT NULL," +
@@ -48,32 +53,45 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        db.execSQL("DROP TABLE IF EXISTS check_records");
-        db.execSQL("DROP TABLE IF EXISTS habits");
-        db.execSQL("DROP TABLE IF EXISTS users");
-        onCreate(db);
+        // v3 introduced per-user habits. Add the column without dropping existing data;
+        // pre-existing habits are assigned to the first user (the seeded demo account).
+        if (oldVersion < 3) {
+            try {
+                db.execSQL("ALTER TABLE habits ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1");
+            } catch (SQLException e) {
+                // Column already present or the table predates this schema; rebuild as a fallback.
+                db.execSQL("DROP TABLE IF EXISTS check_records");
+                db.execSQL("DROP TABLE IF EXISTS habits");
+                db.execSQL("DROP TABLE IF EXISTS users");
+                onCreate(db);
+            }
+        }
     }
 
     private void insertDefaultData(SQLiteDatabase db) {
         ContentValues user = new ContentValues();
         user.put("username", "demo");
         user.put("password", "123456");
-        db.insert("users", null, user);
+        long demoId = db.insert("users", null, user);
+        if (demoId == NO_USER) {
+            demoId = 1;
+        }
 
         long now = System.currentTimeMillis();
-        long readId = insertHabit(db, "晨间阅读", "每天阅读 20 分钟，记录一句喜欢的话。", "每天 07:30",
+        long readId = insertHabit(db, demoId, "晨间阅读", "每天阅读 20 分钟，记录一句喜欢的话。", "每天 07:30",
                 "", "学习", "07:30", 3, now - DateUtils.DAY_MS, now);
-        long sportId = insertHabit(db, "运动打卡", "完成一次散步、跑步或拉伸，让身体醒过来。", "每天 18:30",
+        long sportId = insertHabit(db, demoId, "运动打卡", "完成一次散步、跑步或拉伸，让身体醒过来。", "每天 18:30",
                 "", "运动", "18:30", 1, now, now + 1);
         insertRecord(db, readId, "读完一章，状态不错。", now - DateUtils.DAY_MS);
         insertRecord(db, readId, "今天继续阅读。", now - 2 * DateUtils.DAY_MS);
         insertRecord(db, sportId, "散步 30 分钟。", now);
     }
 
-    private long insertHabit(SQLiteDatabase db, String title, String content, String timeText, String imageUri,
-                             String category, String reminderTime, int checkCount, long lastCheckAt,
-                             long createdAt) {
+    private long insertHabit(SQLiteDatabase db, long userId, String title, String content, String timeText,
+                             String imageUri, String category, String reminderTime, int checkCount,
+                             long lastCheckAt, long createdAt) {
         ContentValues values = new ContentValues();
+        values.put("user_id", userId);
         values.put("title", title);
         values.put("content", content);
         values.put("time_text", timeText);
@@ -94,27 +112,33 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return db.insert("check_records", null, values);
     }
 
-    public boolean login(String username, String password) {
+    /**
+     * @return the matching user's id, or {@link #NO_USER} when the credentials are invalid.
+     */
+    public long login(String username, String password) {
         SQLiteDatabase db = getReadableDatabase();
         try (Cursor cursor = db.query("users", new String[]{"id"},
                 "username=? AND password=?", new String[]{username, password},
                 null, null, null)) {
-            return cursor.moveToFirst();
+            return cursor.moveToFirst() ? cursor.getLong(0) : NO_USER;
         }
     }
 
-    public boolean register(String username, String password) {
+    /**
+     * @return the new user's id, or {@link #NO_USER} when the username already exists.
+     */
+    public long register(String username, String password) {
         ContentValues values = new ContentValues();
         values.put("username", username);
         values.put("password", password);
-        return getWritableDatabase().insert("users", null, values) != -1;
+        return getWritableDatabase().insert("users", null, values);
     }
 
-    public List<Habit> getAllHabits() {
-        return queryHabits(null, null);
+    public List<Habit> getAllHabits(long userId) {
+        return queryHabits(userId, null, null);
     }
 
-    public List<Habit> searchHabits(String keyword, int filterMode) {
+    public List<Habit> searchHabits(String keyword, int filterMode, long userId) {
         String where = null;
         String[] args = null;
         if (!TextUtils.isEmpty(keyword)) {
@@ -122,7 +146,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             String like = "%" + keyword + "%";
             args = new String[]{like, like, like};
         }
-        List<Habit> habits = queryHabits(where, args);
+        List<Habit> habits = queryHabits(userId, where, args);
         ArrayList<Habit> filtered = new ArrayList<>();
         for (Habit habit : habits) {
             if (filterMode == 1 && habit.isCheckedToday()) {
@@ -136,10 +160,21 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return filtered;
     }
 
-    private List<Habit> queryHabits(String where, String[] args) {
+    private List<Habit> queryHabits(long userId, String where, String[] args) {
+        String finalWhere = "user_id=?";
+        String[] finalArgs;
+        if (where == null) {
+            finalArgs = new String[]{String.valueOf(userId)};
+        } else {
+            finalWhere = finalWhere + " AND " + where;
+            finalArgs = new String[args.length + 1];
+            finalArgs[0] = String.valueOf(userId);
+            System.arraycopy(args, 0, finalArgs, 1, args.length);
+        }
+
         ArrayList<Habit> habits = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.query("habits", null, where, args, null, null,
+        try (Cursor cursor = db.query("habits", null, finalWhere, finalArgs, null, null,
                 "created_at DESC, id DESC")) {
             while (cursor.moveToNext()) {
                 habits.add(readHabit(cursor));
@@ -159,9 +194,9 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
-    public long addHabit(String title, String content, String timeText, String imageUri,
+    public long addHabit(long userId, String title, String content, String timeText, String imageUri,
                          String category, String reminderTime) {
-        return insertHabit(getWritableDatabase(), title, content, timeText, imageUri,
+        return insertHabit(getWritableDatabase(), userId, title, content, timeText, imageUri,
                 category, reminderTime, 0, 0, System.currentTimeMillis());
     }
 
@@ -203,16 +238,17 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         if (getHabit(habitId) == null) {
             return false;
         }
-        return insertRecord(getWritableDatabase(), habitId, note, System.currentTimeMillis()) != -1;
+        return insertRecord(getWritableDatabase(), habitId, note, System.currentTimeMillis()) != NO_USER;
     }
 
-    public List<CheckRecord> getAllRecords() {
+    public List<CheckRecord> getAllRecords(long userId) {
         ArrayList<CheckRecord> records = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
         String sql = "SELECT r.id, r.habit_id, h.title, r.note, r.checked_at " +
-                "FROM check_records r LEFT JOIN habits h ON r.habit_id=h.id " +
+                "FROM check_records r JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=? " +
                 "ORDER BY r.checked_at DESC";
-        try (Cursor cursor = db.rawQuery(sql, null)) {
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId)})) {
             while (cursor.moveToNext()) {
                 records.add(new CheckRecord(
                         cursor.getLong(0),
@@ -226,27 +262,31 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return records;
     }
 
-    public int getTotalRecordCount() {
+    public int getTotalRecordCount(long userId) {
         SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.rawQuery("SELECT COUNT(*) FROM check_records", null)) {
+        String sql = "SELECT COUNT(*) FROM check_records r JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=?";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId)})) {
             return cursor.moveToFirst() ? cursor.getInt(0) : 0;
         }
     }
 
-    public int getCheckedHabitCountForDay(long dayStart) {
+    public int getCheckedHabitCountForDay(long dayStart, long userId) {
         SQLiteDatabase db = getReadableDatabase();
         long dayEnd = dayStart + DateUtils.DAY_MS;
-        try (Cursor cursor = db.rawQuery(
-                "SELECT COUNT(DISTINCT habit_id) FROM check_records WHERE checked_at>=? AND checked_at<?",
-                new String[]{String.valueOf(dayStart), String.valueOf(dayEnd)})) {
+        String sql = "SELECT COUNT(DISTINCT r.habit_id) FROM check_records r " +
+                "JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=? AND r.checked_at>=? AND r.checked_at<?";
+        try (Cursor cursor = db.rawQuery(sql,
+                new String[]{String.valueOf(userId), String.valueOf(dayStart), String.valueOf(dayEnd)})) {
             return cursor.moveToFirst() ? cursor.getInt(0) : 0;
         }
     }
 
-    public String buildExportText() {
+    public String buildExportText(long userId) {
         StringBuilder builder = new StringBuilder();
         builder.append("DayMark 打卡记录导出\n\n");
-        for (Habit habit : getAllHabits()) {
+        for (Habit habit : getAllHabits(userId)) {
             builder.append("事件：").append(habit.title).append('\n');
             builder.append("分类：").append(habit.category).append('\n');
             builder.append("时间：").append(habit.timeText).append('\n');
@@ -256,7 +296,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             builder.append("内容：").append(habit.content).append("\n\n");
         }
         builder.append("详细打卡记录\n");
-        for (CheckRecord record : getAllRecords()) {
+        for (CheckRecord record : getAllRecords(userId)) {
             builder.append(DateUtils.formatDateTime(record.checkedAt))
                     .append("  ")
                     .append(record.habitTitle);
@@ -318,25 +358,25 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return streak;
     }
 
-    public String buildWeekSummary() {
+    public String buildWeekSummary(long userId) {
         StringBuilder builder = new StringBuilder("最近 7 天打卡情况\n");
         long today = DateUtils.startOfDay(System.currentTimeMillis());
         for (int i = 6; i >= 0; i--) {
             long day = today - i * DateUtils.DAY_MS;
             builder.append(DateUtils.formatMonthDay(day))
                     .append("：")
-                    .append(getCheckedHabitCountForDay(day))
+                    .append(getCheckedHabitCountForDay(day, userId))
                     .append(" 个事件\n");
         }
         return builder.toString().trim();
     }
 
-    public double getCompletionRateToday() {
-        int habitCount = getAllHabits().size();
+    public double getCompletionRateToday(long userId) {
+        int habitCount = getAllHabits(userId).size();
         if (habitCount == 0) {
             return 0;
         }
-        int checked = getCheckedHabitCountForDay(DateUtils.startOfDay(System.currentTimeMillis()));
+        int checked = getCheckedHabitCountForDay(DateUtils.startOfDay(System.currentTimeMillis()), userId);
         return checked * 100.0 / habitCount;
     }
 

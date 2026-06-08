@@ -18,6 +18,7 @@ public class CalendarActivity extends Activity {
         setContentView(R.layout.activity_calendar);
 
         DayMarkDbHelper dbHelper = new DayMarkDbHelper(this);
+        long userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
         GridView calendarGrid = findViewById(R.id.calendarGrid);
         Button backButton = findViewById(R.id.backButton);
 
@@ -42,7 +43,7 @@ public class CalendarActivity extends Activity {
         for (int day = 1; day <= maxDay; day++) {
             calendar.set(Calendar.DAY_OF_MONTH, day);
             long dayStart = DateUtils.startOfDay(calendar.getTimeInMillis());
-            int count = dbHelper.getCheckedHabitCountForDay(dayStart);
+            int count = dbHelper.getCheckedHabitCountForDay(dayStart, userId);
             days.add(day + "\n" + (count > 0 ? count + " 项" : "-"));
         }
 

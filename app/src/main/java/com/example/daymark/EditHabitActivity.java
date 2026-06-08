@@ -36,6 +36,7 @@ public class EditHabitActivity extends Activity {
     private ImageView previewImage;
     private String imageUri = "";
     private long habitId = -1;
+    private long userId = DayMarkDbHelper.NO_USER;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +62,7 @@ public class EditHabitActivity extends Activity {
         categorySpinner.setAdapter(categoryAdapter);
 
         habitId = getIntent().getLongExtra("habit_id", -1);
+        userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
         if (habitId != -1) {
             pageTitle.setText("编辑打卡事件");
             loadHabit(habitId);
@@ -203,7 +205,11 @@ public class EditHabitActivity extends Activity {
         boolean success;
         long savedId;
         if (habitId == -1) {
-            savedId = dbHelper.addHabit(title, content, timeText, imageUri, category, reminderTime);
+            if (userId == DayMarkDbHelper.NO_USER) {
+                Toast.makeText(this, "登录状态已失效，请重新登录", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            savedId = dbHelper.addHabit(userId, title, content, timeText, imageUri, category, reminderTime);
             success = savedId != -1;
         } else {
             success = dbHelper.updateHabit(habitId, title, content, timeText, imageUri, category, reminderTime);
