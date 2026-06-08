@@ -241,6 +241,84 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return insertRecord(getWritableDatabase(), habitId, note, System.currentTimeMillis()) != NO_USER;
     }
 
+    /**
+     * Undo the most recent check-in made today for the given habit. Deletes that record,
+     * decrements the cached check_count, and resets last_check_at to the newest remaining
+     * record (0 if none remain) so the "checked today" state is restored correctly.
+     *
+     * @return true if a record from today was removed.
+     */
+    public boolean undoTodayCheck(long habitId) {
+        Habit habit = getHabit(habitId);
+        if (habit == null) {
+            return false;
+        }
+        long dayStart = DateUtils.startOfDay(System.currentTimeMillis());
+        long dayEnd = dayStart + DateUtils.DAY_MS;
+        SQLiteDatabase db = getWritableDatabase();
+
+        long recordId = NO_USER;
+        try (Cursor cursor = db.query("check_records", new String[]{"id"},
+                "habit_id=? AND checked_at>=? AND checked_at<?",
+                new String[]{String.valueOf(habitId), String.valueOf(dayStart), String.valueOf(dayEnd)},
+                null, null, "checked_at DESC", "1")) {
+            if (cursor.moveToFirst()) {
+                recordId = cursor.getLong(0);
+            }
+        }
+        if (recordId == NO_USER) {
+            return false;
+        }
+
+        db.delete("check_records", "id=?", new String[]{String.valueOf(recordId)});
+
+        long lastCheckAt = 0;
+        try (Cursor cursor = db.query("check_records", new String[]{"checked_at"}, "habit_id=?",
+                new String[]{String.valueOf(habitId)}, null, null, "checked_at DESC", "1")) {
+            if (cursor.moveToFirst()) {
+                lastCheckAt = cursor.getLong(0);
+            }
+        }
+
+        ContentValues values = new ContentValues();
+        values.put("check_count", Math.max(0, habit.checkCount - 1));
+        values.put("last_check_at", lastCheckAt);
+        db.update("habits", values, "id=?", new String[]{String.valueOf(habitId)});
+        return true;
+    }
+
+    /**
+     * @return true if the current password matched and was updated.
+     */
+    public boolean changePassword(long userId, String oldPassword, String newPassword) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("password", newPassword);
+        return db.update("users", values, "id=? AND password=?",
+                new String[]{String.valueOf(userId), oldPassword}) > 0;
+    }
+
+    /**
+     * Delete a user along with all of their habits and check records.
+     *
+     * @return true if the user existed and was removed.
+     */
+    public boolean deleteUser(long userId) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            // Remove check records belonging to this user's habits first.
+            db.execSQL("DELETE FROM check_records WHERE habit_id IN " +
+                    "(SELECT id FROM habits WHERE user_id=?)", new Object[]{userId});
+            db.delete("habits", "user_id=?", new String[]{String.valueOf(userId)});
+            int removed = db.delete("users", "id=?", new String[]{String.valueOf(userId)});
+            db.setTransactionSuccessful();
+            return removed > 0;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     public List<CheckRecord> getAllRecords(long userId) {
         ArrayList<CheckRecord> records = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();

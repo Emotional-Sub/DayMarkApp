@@ -78,23 +78,36 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:gravity="end"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/doneButton"
-            android:layout_width="74dp"
+            android:layout_width="0dp"
             android:layout_height="42dp"
+            android:layout_weight="1"
             android:background="@drawable/bg_button_primary"
             android:text="打卡"
             android:textColor="@android:color/white"
             android:textSize="14sp" />
 
         <Button
-            android:id="@+id/noteButton"
-            android:layout_width="74dp"
+            android:id="@+id/undoButton"
+            android:layout_width="0dp"
             android:layout_height="42dp"
             android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="撤销"
+            android:textColor="@color/brand_coral"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/noteButton"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
             android:background="@drawable/bg_button_outline"
             android:text="备注"
             android:textColor="@color/brand_green"
@@ -102,9 +115,10 @@
 
         <Button
             android:id="@+id/editButton"
-            android:layout_width="64dp"
+            android:layout_width="0dp"
             android:layout_height="42dp"
             android:layout_marginStart="8dp"
+            android:layout_weight="1"
             android:background="@drawable/bg_button_outline"
             android:text="编辑"
             android:textColor="@color/brand_green"
@@ -112,9 +126,10 @@
 
         <Button
             android:id="@+id/deleteButton"
-            android:layout_width="64dp"
+            android:layout_width="0dp"
             android:layout_height="42dp"
             android:layout_marginStart="8dp"
+            android:layout_weight="1"
             android:background="@drawable/bg_button_outline"
             android:text="删除"
             android:textColor="@color/brand_coral"

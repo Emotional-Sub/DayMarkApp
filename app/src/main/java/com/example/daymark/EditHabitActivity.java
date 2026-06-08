@@ -2,6 +2,7 @@ package com.example.daymark;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -20,6 +21,7 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Locale;
 
 public class EditHabitActivity extends Activity {
     private static final int REQUEST_CAMERA = 20;
@@ -72,6 +74,60 @@ public class EditHabitActivity extends Activity {
         galleryButton.setOnClickListener(v -> openGallery());
         saveButton.setOnClickListener(v -> saveHabit());
         cancelButton.setOnClickListener(v -> finish());
+
+        // Time fields are picked, not typed, so the stored value is always valid HH:mm.
+        attachTimePicker(timeEdit, false);
+        attachTimePicker(reminderEdit, true);
+    }
+
+    /**
+     * Make an EditText open a TimePickerDialog on tap instead of accepting keyboard input.
+     * When {@code clearable} is true a long-press clears the value (used for the optional reminder).
+     */
+    private void attachTimePicker(EditText field, boolean clearable) {
+        field.setFocusable(false);
+        field.setClickable(true);
+        field.setOnClickListener(v -> showTimePicker(field));
+        if (clearable) {
+            field.setOnLongClickListener(v -> {
+                field.setText("");
+                Toast.makeText(this, "已清除提醒", Toast.LENGTH_SHORT).show();
+                return true;
+            });
+        }
+    }
+
+    private void showTimePicker(EditText field) {
+        int hour = 8;
+        int minute = 0;
+        int[] parsed = parseHourMinute(field.getText().toString());
+        if (parsed != null) {
+            hour = parsed[0];
+            minute = parsed[1];
+        }
+        new TimePickerDialog(this, (view, selectedHour, selectedMinute) ->
+                field.setText(String.format(Locale.CHINA, "%02d:%02d", selectedHour, selectedMinute)),
+                hour, minute, true).show();
+    }
+
+    private int[] parseHourMinute(String text) {
+        if (TextUtils.isEmpty(text)) {
+            return null;
+        }
+        String[] parts = text.trim().split(":");
+        if (parts.length != 2) {
+            return null;
+        }
+        try {
+            int hour = Integer.parseInt(parts[0].trim());
+            int minute = Integer.parseInt(parts[1].trim());
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return null;
+            }
+            return new int[]{hour, minute};
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private void loadHabit(long id) {

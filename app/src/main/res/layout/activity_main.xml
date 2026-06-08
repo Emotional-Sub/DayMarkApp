@@ -40,9 +40,19 @@
         </LinearLayout>
 
         <Button
+            android:id="@+id/accountButton"
+            android:layout_width="72dp"
+            android:layout_height="42dp"
+            android:background="@drawable/bg_button_outline"
+            android:text="账号"
+            android:textColor="@color/brand_green"
+            android:textSize="14sp" />
+
+        <Button
             android:id="@+id/logoutButton"
             android:layout_width="72dp"
             android:layout_height="42dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/bg_button_outline"
             android:text="退出"
             android:textColor="@color/brand_green"
@@ -142,16 +152,35 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <ListView
-        android:id="@+id/habitList"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:divider="@android:color/transparent"
-        android:dividerHeight="12dp"
-        android:paddingHorizontal="14dp"
-        android:paddingBottom="88dp" />
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/habitList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:divider="@android:color/transparent"
+            android:dividerHeight="12dp"
+            android:paddingHorizontal="14dp"
+            android:paddingBottom="88dp" />
+
+        <TextView
+            android:id="@+id/emptyView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:paddingHorizontal="32dp"
+            android:paddingBottom="88dp"
+            android:text="还没有打卡事件\n点下方“新增打卡事件”开始吧"
+            android:textColor="@color/muted"
+            android:textSize="15sp"
+            android:lineSpacingExtra="6dp"
+            android:visibility="gone" />
+
+    </FrameLayout>
 
     <Button
         android:id="@+id/addButton"

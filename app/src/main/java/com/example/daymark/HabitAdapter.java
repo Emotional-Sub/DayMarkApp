@@ -95,6 +95,8 @@ public class HabitAdapter extends BaseAdapter {
 
         holder.doneButton.setText(habit.isCheckedToday() ? "再记" : "打卡");
         holder.doneButton.setOnClickListener(v -> showCheckDialog(habit));
+        holder.undoButton.setVisibility(habit.isCheckedToday() ? View.VISIBLE : View.GONE);
+        holder.undoButton.setOnClickListener(v -> confirmUndo(habit));
         holder.noteButton.setOnClickListener(v -> showNoteDialog(habit));
         holder.editButton.setOnClickListener(v -> listener.onEdit(habit));
         holder.deleteButton.setOnClickListener(v -> confirmDelete(habit));
@@ -146,6 +148,22 @@ public class HabitAdapter extends BaseAdapter {
         return input;
     }
 
+    private void confirmUndo(Habit habit) {
+        new AlertDialog.Builder(context)
+                .setTitle("撤销今日打卡")
+                .setMessage("将删除“" + habit.title + "”今天最近的一条打卡记录，确定吗？")
+                .setPositiveButton("撤销", (dialog, which) -> {
+                    if (dbHelper.undoTodayCheck(habit.id)) {
+                        Toast.makeText(context, "已撤销今日打卡", Toast.LENGTH_SHORT).show();
+                        listener.onChanged();
+                    } else {
+                        Toast.makeText(context, "今天没有可撤销的打卡", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
     private void confirmDelete(Habit habit) {
         new AlertDialog.Builder(context)
                 .setTitle("删除事件")
@@ -168,6 +186,7 @@ public class HabitAdapter extends BaseAdapter {
         final TextView statusText;
         final ImageView photoView;
         final Button doneButton;
+        final Button undoButton;
         final Button noteButton;
         final Button editButton;
         final Button deleteButton;
@@ -181,6 +200,7 @@ public class HabitAdapter extends BaseAdapter {
             statusText = view.findViewById(R.id.statusText);
             photoView = view.findViewById(R.id.photoView);
             doneButton = view.findViewById(R.id.doneButton);
+            undoButton = view.findViewById(R.id.undoButton);
             noteButton = view.findViewById(R.id.noteButton);
             editButton = view.findViewById(R.id.editButton);
             deleteButton = view.findViewById(R.id.deleteButton);

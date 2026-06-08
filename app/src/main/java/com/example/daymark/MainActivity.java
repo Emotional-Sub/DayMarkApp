@@ -1,13 +1,17 @@
 package com.example.daymark;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.Editable;
+import android.text.InputType;
+import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,6 +33,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private Button doneTodayButton;
     private int filterMode = 0;
     private long userId = DayMarkDbHelper.NO_USER;
+    private String username;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,7 +47,9 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         summaryText = findViewById(R.id.summaryText);
         searchEdit = findViewById(R.id.searchEdit);
         ListView habitList = findViewById(R.id.habitList);
+        habitList.setEmptyView(findViewById(R.id.emptyView));
         Button addButton = findViewById(R.id.addButton);
+        Button accountButton = findViewById(R.id.accountButton);
         Button logoutButton = findViewById(R.id.logoutButton);
         Button calendarButton = findViewById(R.id.calendarButton);
         Button statsButton = findViewById(R.id.statsButton);
@@ -51,7 +58,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         todoButton = findViewById(R.id.todoButton);
         doneTodayButton = findViewById(R.id.doneTodayButton);
 
-        String username = getIntent().getStringExtra("username");
+        username = getIntent().getStringExtra("username");
         userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
         if (userId == DayMarkDbHelper.NO_USER) {
             // No valid session (e.g. launched without logging in); send back to login.
@@ -67,6 +74,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             intent.putExtra("user_id", userId);
             startActivity(intent);
         });
+        accountButton.setOnClickListener(v -> showAccountMenu());
         logoutButton.setOnClickListener(v -> {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
@@ -150,6 +158,75 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         summaryText.setText(String.format(Locale.CHINA,
                 "共 %d 个事件，今日完成 %d 个，累计 %d 次，最高连续 %d 天",
                 allHabits.size(), completedToday, totalChecks, bestStreak));
+    }
+
+    private void showAccountMenu() {
+        new AlertDialog.Builder(this)
+                .setTitle("账号设置")
+                .setItems(new String[]{"修改密码", "删除账号"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showChangePasswordDialog();
+                    } else {
+                        confirmDeleteAccount();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showChangePasswordDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        EditText oldInput = new EditText(this);
+        oldInput.setHint("当前密码");
+        oldInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        EditText newInput = new EditText(this);
+        newInput.setHint("新密码");
+        newInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(padding, padding / 2, padding, 0);
+        layout.addView(oldInput);
+        layout.addView(newInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("修改密码")
+                .setView(layout)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String oldPwd = oldInput.getText().toString();
+                    String newPwd = newInput.getText().toString();
+                    if (TextUtils.isEmpty(oldPwd) || TextUtils.isEmpty(newPwd)) {
+                        Toast.makeText(this, "请填写当前密码和新密码", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (dbHelper.changePassword(userId, oldPwd, newPwd)) {
+                        Toast.makeText(this, "密码已修改，请重新登录", Toast.LENGTH_SHORT).show();
+                        startActivity(new Intent(this, LoginActivity.class));
+                        finish();
+                    } else {
+                        Toast.makeText(this, "当前密码不正确", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void confirmDeleteAccount() {
+        new AlertDialog.Builder(this)
+                .setTitle("删除账号")
+                .setMessage("将永久删除账号“" + (username == null ? "" : username) +
+                        "”及其所有打卡事件和记录，且无法恢复。确定吗？")
+                .setPositiveButton("永久删除", (dialog, which) -> {
+                    if (dbHelper.deleteUser(userId)) {
+                        Toast.makeText(this, "账号已删除", Toast.LENGTH_SHORT).show();
+                        startActivity(new Intent(this, LoginActivity.class));
+                        finish();
+                    } else {
+                        Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private void exportReport() {
