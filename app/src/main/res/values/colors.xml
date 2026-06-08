@@ -1,0 +1,10 @@
+<resources>
+    <color name="brand_green">#2F7D68</color>
+    <color name="brand_green_dark">#235F50</color>
+    <color name="brand_coral">#E76F51</color>
+    <color name="ink">#1F2933</color>
+    <color name="muted">#697586</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="app_bg">#F6F7F2</color>
+    <color name="line">#DDE3DA</color>
+</resources>

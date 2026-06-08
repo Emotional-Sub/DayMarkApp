@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_app"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="18dp">
+
+        <TextView
+            android:id="@+id/pageTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="新增打卡事件"
+            android:textColor="@color/ink"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/titleEdit"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/bg_input"
+            android:hint="事件标题"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted" />
+
+        <EditText
+            android:id="@+id/contentEdit"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:gravity="top"
+            android:hint="事件内容 / 目标说明"
+            android:inputType="textMultiLine"
+            android:padding="14dp"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted" />
+
+        <EditText
+            android:id="@+id/timeEdit"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:hint="时间，例如 07:30 或 每晚 21:00"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted" />
+
+        <ImageView
+            android:id="@+id/previewImage"
+            android:layout_width="match_parent"
+            android:layout_height="210dp"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_photo"
+            android:contentDescription="图片预览"
+            android:scaleType="centerCrop" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/cameraButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_button_outline"
+                android:text="拍照"
+                android:textColor="@color/brand_green"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/galleryButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_button_outline"
+                android:text="相册选择"
+                android:textColor="@color/brand_green"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/bg_button_primary"
+            android:text="保存事件"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/cancelButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_button_outline"
+            android:text="取消"
+            android:textColor="@color/brand_green"
+            android:textSize="15sp" />
+    </LinearLayout>
+</ScrollView>

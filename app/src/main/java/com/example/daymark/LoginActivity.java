@@ -1,0 +1,106 @@
+package com.example.daymark;
+
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.Toast;
+
+import android.app.Activity;
+
+public class LoginActivity extends Activity {
+    private EditText usernameEdit;
+    private EditText passwordEdit;
+    private CheckBox rememberCheck;
+    private DayMarkDbHelper dbHelper;
+    private SharedPreferences preferences;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_login);
+
+        dbHelper = new DayMarkDbHelper(this);
+        preferences = getSharedPreferences("login", MODE_PRIVATE);
+
+        usernameEdit = findViewById(R.id.usernameEdit);
+        passwordEdit = findViewById(R.id.passwordEdit);
+        rememberCheck = findViewById(R.id.rememberCheck);
+        Button loginButton = findViewById(R.id.loginButton);
+        Button registerButton = findViewById(R.id.registerButton);
+
+        loadRememberedAccount();
+        loginButton.setOnClickListener(v -> doLogin());
+        registerButton.setOnClickListener(v -> doRegister());
+    }
+
+    private void loadRememberedAccount() {
+        boolean remembered = preferences.getBoolean("remember", false);
+        rememberCheck.setChecked(remembered);
+        if (remembered) {
+            usernameEdit.setText(preferences.getString("username", ""));
+            passwordEdit.setText(preferences.getString("password", ""));
+        } else {
+            usernameEdit.setText("demo");
+            passwordEdit.setText("123456");
+        }
+    }
+
+    private void doLogin() {
+        String username = usernameEdit.getText().toString().trim();
+        String password = passwordEdit.getText().toString();
+        if (!validate(username, password)) {
+            return;
+        }
+        if (dbHelper.login(username, password)) {
+            saveRememberState(username, password);
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.putExtra("username", username);
+            startActivity(intent);
+            finish();
+        } else {
+            Toast.makeText(this, "账号或密码不正确", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void doRegister() {
+        String username = usernameEdit.getText().toString().trim();
+        String password = passwordEdit.getText().toString();
+        if (!validate(username, password)) {
+            return;
+        }
+        if (dbHelper.register(username, password)) {
+            Toast.makeText(this, "注册成功，请登录", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "用户名已存在", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private boolean validate(String username, String password) {
+        if (TextUtils.isEmpty(username)) {
+            usernameEdit.setError("请输入用户名");
+            return false;
+        }
+        if (TextUtils.isEmpty(password)) {
+            passwordEdit.setError("请输入密码");
+            return false;
+        }
+        return true;
+    }
+
+    private void saveRememberState(String username, String password) {
+        SharedPreferences.Editor editor = preferences.edit();
+        editor.putBoolean("remember", rememberCheck.isChecked());
+        if (rememberCheck.isChecked()) {
+            editor.putString("username", username);
+            editor.putString("password", password);
+        } else {
+            editor.remove("username");
+            editor.remove("password");
+        }
+        editor.apply();
+    }
+}
