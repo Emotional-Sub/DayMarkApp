@@ -49,6 +49,99 @@
             android:textSize="14sp" />
     </LinearLayout>
 
+    <EditText
+        android:id="@+id/searchEdit"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:layout_marginHorizontal="18dp"
+        android:background="@drawable/bg_input"
+        android:hint="搜索标题或内容"
+        android:paddingHorizontal="14dp"
+        android:singleLine="true"
+        android:textColor="@color/ink"
+        android:textColorHint="@color/muted"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/allButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_primary"
+            android:text="全部"
+            android:textColor="@android:color/white"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/todoButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="今日待完成"
+            android:textColor="@color/brand_green"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/doneTodayButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="今日已完成"
+            android:textColor="@color/brand_green"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="18dp"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/calendarButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="日历"
+            android:textColor="@color/brand_green"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/statsButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="统计"
+            android:textColor="@color/brand_green"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/exportButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="导出"
+            android:textColor="@color/brand_green"
+            android:textSize="13sp" />
+    </LinearLayout>
+
     <ListView
         android:id="@+id/habitList"
         android:layout_width="match_parent"

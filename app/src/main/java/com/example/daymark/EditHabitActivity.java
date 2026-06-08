@@ -9,9 +9,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -23,11 +25,14 @@ public class EditHabitActivity extends Activity {
     private static final int REQUEST_CAMERA = 20;
     private static final int REQUEST_GALLERY = 21;
     private static final int REQUEST_CAMERA_PERMISSION = 22;
+    private static final String[] CATEGORIES = {"学习", "运动", "生活", "工作", "健康", "其他"};
 
     private DayMarkDbHelper dbHelper;
     private EditText titleEdit;
     private EditText contentEdit;
     private EditText timeEdit;
+    private Spinner categorySpinner;
+    private EditText reminderEdit;
     private ImageView previewImage;
     private String imageUri = "";
     private long habitId = -1;
@@ -41,12 +46,19 @@ public class EditHabitActivity extends Activity {
         titleEdit = findViewById(R.id.titleEdit);
         contentEdit = findViewById(R.id.contentEdit);
         timeEdit = findViewById(R.id.timeEdit);
+        categorySpinner = findViewById(R.id.categorySpinner);
+        reminderEdit = findViewById(R.id.reminderEdit);
         previewImage = findViewById(R.id.previewImage);
         TextView pageTitle = findViewById(R.id.pageTitle);
         Button cameraButton = findViewById(R.id.cameraButton);
         Button galleryButton = findViewById(R.id.galleryButton);
         Button saveButton = findViewById(R.id.saveButton);
         Button cancelButton = findViewById(R.id.cancelButton);
+
+        ArrayAdapter<String> categoryAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, CATEGORIES);
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        categorySpinner.setAdapter(categoryAdapter);
 
         habitId = getIntent().getLongExtra("habit_id", -1);
         if (habitId != -1) {
@@ -70,8 +82,20 @@ public class EditHabitActivity extends Activity {
         titleEdit.setText(habit.title);
         contentEdit.setText(habit.content);
         timeEdit.setText(habit.timeText);
+        setCategorySelection(habit.category);
+        reminderEdit.setText(habit.reminderTime);
         imageUri = habit.imageUri == null ? "" : habit.imageUri;
         showImage();
+    }
+
+    private void setCategorySelection(String category) {
+        for (int i = 0; i < CATEGORIES.length; i++) {
+            if (CATEGORIES[i].equals(category)) {
+                categorySpinner.setSelection(i);
+                return;
+            }
+        }
+        categorySpinner.setSelection(0);
     }
 
     private void openCamera() {
@@ -173,14 +197,21 @@ public class EditHabitActivity extends Activity {
             return;
         }
 
+        String category = dbHelper.normalizeCategory((String) categorySpinner.getSelectedItem());
+        String reminderTime = dbHelper.normalizeReminder(reminderEdit.getText().toString().trim());
+
         boolean success;
+        long savedId;
         if (habitId == -1) {
-            success = dbHelper.addHabit(title, content, timeText, imageUri) != -1;
+            savedId = dbHelper.addHabit(title, content, timeText, imageUri, category, reminderTime);
+            success = savedId != -1;
         } else {
-            success = dbHelper.updateHabit(habitId, title, content, timeText, imageUri);
+            success = dbHelper.updateHabit(habitId, title, content, timeText, imageUri, category, reminderTime);
+            savedId = habitId;
         }
 
         if (success) {
+            ReminderReceiver.schedule(this, dbHelper.getHabit(savedId));
             Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
             finish();
         } else {

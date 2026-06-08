@@ -2,22 +2,22 @@ package com.example.daymark;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class HabitAdapter extends BaseAdapter {
     public interface HabitActionListener {
@@ -29,7 +29,6 @@ public class HabitAdapter extends BaseAdapter {
     private final Context context;
     private final DayMarkDbHelper dbHelper;
     private final HabitActionListener listener;
-    private final SimpleDateFormat dateFormat = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA);
     private List<Habit> data = new ArrayList<>();
 
     public HabitAdapter(Context context, DayMarkDbHelper dbHelper, HabitActionListener listener) {
@@ -73,28 +72,78 @@ public class HabitAdapter extends BaseAdapter {
         holder.titleText.setText(habit.title);
         holder.timeText.setText("时间：" + habit.timeText);
         holder.contentText.setText(habit.content);
-        holder.statusText.setText("已打卡 " + habit.checkCount + " 次");
+        holder.statusText.setText(habit.isCheckedToday() ? "今日已完成" : "今日待完成");
+        holder.metaText.setText("分类：" + habit.category +
+                "  |  连续 " + habit.streakDays + " 天" +
+                "  |  累计 " + habit.checkCount + " 次" +
+                (TextUtils.isEmpty(habit.reminderTime) ? "" : "  |  提醒 " + habit.reminderTime));
+        holder.noteText.setText(TextUtils.isEmpty(habit.lastNote) ? "最近备注：暂无" : "最近备注：" + habit.lastNote);
 
         if (!TextUtils.isEmpty(habit.imageUri)) {
             holder.photoView.setVisibility(View.VISIBLE);
             holder.photoView.setImageURI(Uri.parse(habit.imageUri));
+            holder.photoView.setOnClickListener(v -> {
+                Intent intent = new Intent(context, ImagePreviewActivity.class);
+                intent.putExtra("image_uri", habit.imageUri);
+                context.startActivity(intent);
+            });
         } else {
             holder.photoView.setVisibility(View.GONE);
             holder.photoView.setImageDrawable(null);
+            holder.photoView.setOnClickListener(null);
         }
 
-        holder.doneButton.setText(habit.lastCheckAt > 0
-                ? "打卡\n" + dateFormat.format(new Date(habit.lastCheckAt))
-                : "打卡");
-        holder.doneButton.setOnClickListener(v -> {
-            if (dbHelper.markChecked(habit.id)) {
-                Toast.makeText(context, "打卡成功", Toast.LENGTH_SHORT).show();
-                listener.onChanged();
-            }
-        });
+        holder.doneButton.setText(habit.isCheckedToday() ? "再记" : "打卡");
+        holder.doneButton.setOnClickListener(v -> showCheckDialog(habit));
+        holder.noteButton.setOnClickListener(v -> showNoteDialog(habit));
         holder.editButton.setOnClickListener(v -> listener.onEdit(habit));
         holder.deleteButton.setOnClickListener(v -> confirmDelete(habit));
         return convertView;
+    }
+
+    private void showCheckDialog(Habit habit) {
+        EditText input = buildNoteInput("今天完成了什么？可不填");
+        new AlertDialog.Builder(context)
+                .setTitle("打卡：" + habit.title)
+                .setView(input)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    if (dbHelper.markChecked(habit.id, input.getText().toString().trim())) {
+                        Toast.makeText(context, "打卡成功", Toast.LENGTH_SHORT).show();
+                        listener.onChanged();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void showNoteDialog(Habit habit) {
+        EditText input = buildNoteInput("补充一条打卡备注");
+        new AlertDialog.Builder(context)
+                .setTitle("打卡备注")
+                .setView(input)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String note = input.getText().toString().trim();
+                    if (TextUtils.isEmpty(note)) {
+                        Toast.makeText(context, "备注不能为空", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (dbHelper.addNote(habit.id, note)) {
+                        Toast.makeText(context, "备注已保存", Toast.LENGTH_SHORT).show();
+                        listener.onChanged();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private EditText buildNoteInput(String hint) {
+        EditText input = new EditText(context);
+        int padding = (int) (16 * context.getResources().getDisplayMetrics().density);
+        input.setPadding(padding, padding / 2, padding, padding / 2);
+        input.setHint(hint);
+        input.setMinLines(2);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        return input;
     }
 
     private void confirmDelete(Habit habit) {
@@ -102,6 +151,7 @@ public class HabitAdapter extends BaseAdapter {
                 .setTitle("删除事件")
                 .setMessage("确定删除“" + habit.title + "”吗？")
                 .setPositiveButton("删除", (dialog, which) -> {
+                    ReminderReceiver.cancel(context, habit.id);
                     dbHelper.deleteHabit(habit.id);
                     listener.onChanged();
                 })
@@ -112,20 +162,26 @@ public class HabitAdapter extends BaseAdapter {
     private static class ViewHolder {
         final TextView titleText;
         final TextView timeText;
+        final TextView metaText;
         final TextView contentText;
+        final TextView noteText;
         final TextView statusText;
         final ImageView photoView;
         final Button doneButton;
+        final Button noteButton;
         final Button editButton;
         final Button deleteButton;
 
         ViewHolder(View view) {
             titleText = view.findViewById(R.id.titleText);
             timeText = view.findViewById(R.id.timeText);
+            metaText = view.findViewById(R.id.metaText);
             contentText = view.findViewById(R.id.contentText);
+            noteText = view.findViewById(R.id.noteText);
             statusText = view.findViewById(R.id.statusText);
             photoView = view.findViewById(R.id.photoView);
             doneButton = view.findViewById(R.id.doneButton);
+            noteButton = view.findViewById(R.id.noteButton);
             editButton = view.findViewById(R.id.editButton);
             deleteButton = view.findViewById(R.id.deleteButton);
         }

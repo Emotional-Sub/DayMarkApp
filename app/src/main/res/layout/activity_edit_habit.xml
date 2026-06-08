@@ -57,6 +57,26 @@
             android:textColor="@color/ink"
             android:textColorHint="@color/muted" />
 
+        <Spinner
+            android:id="@+id/categorySpinner"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:paddingHorizontal="10dp" />
+
+        <EditText
+            android:id="@+id/reminderEdit"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:hint="提醒时间，例如 21:30，可不填"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted" />
+
         <ImageView
             android:id="@+id/previewImage"
             android:layout_width="match_parent"
