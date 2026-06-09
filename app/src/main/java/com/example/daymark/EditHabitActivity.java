@@ -2,13 +2,17 @@ package com.example.daymark;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.TimePickerDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.AdapterView;
@@ -22,9 +26,9 @@ import android.widget.TextView;
 import android.widget.ToggleButton;
 import android.widget.Toast;
 
+import androidx.core.content.FileProvider;
+
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.Locale;
 import java.util.Set;
 
@@ -35,6 +39,13 @@ public class EditHabitActivity extends Activity {
     private static final String[] CATEGORIES = {"学习", "运动", "生活", "工作", "健康", "其他"};
     // Spinner order maps to Habit.FREQ_DAILY / FREQ_WEEKLY_DAYS / FREQ_WEEKLY_COUNT by index.
     private static final String[] FREQUENCY_LABELS = {"每天", "每周指定星期", "每周 N 次"};
+
+    // Saved across process death while the camera is open (see onSaveInstanceState).
+    private static final String STATE_PENDING_CAMERA = "pending_camera_file";
+    private static final String STATE_IMAGE_URI = "image_uri";
+
+    // One-shot flag so the battery-optimization nudge is only shown once per install.
+    private static final String PREF_BATTERY_PROMPT_SHOWN = "battery_prompt_shown";
 
     private DayMarkDbHelper dbHelper;
     private EditText titleEdit;
@@ -49,6 +60,9 @@ public class EditHabitActivity extends Activity {
     private EditText reminderEdit;
     private ImageView previewImage;
     private String imageUri = "";
+    // Full-size photo the camera is asked to write into, via EXTRA_OUTPUT. Held across the
+    // capture intent and consumed in onActivityResult; also re-saved/restored on rotation.
+    private File pendingCameraFile;
     private long habitId = -1;
     private long userId = DayMarkDbHelper.NO_USER;
 
@@ -118,6 +132,31 @@ public class EditHabitActivity extends Activity {
         // Time fields are picked, not typed, so the stored value is always valid HH:mm.
         attachTimePicker(timeEdit, false);
         attachTimePicker(reminderEdit, true);
+
+        // The camera runs in its own process and can have our Activity recycled while it's open;
+        // recover the pending output path (and any already-chosen image) saved before that happened.
+        if (savedInstanceState != null) {
+            String pendingPath = savedInstanceState.getString(STATE_PENDING_CAMERA);
+            if (pendingPath != null) {
+                pendingCameraFile = new File(pendingPath);
+            }
+            String savedImage = savedInstanceState.getString(STATE_IMAGE_URI);
+            if (savedImage != null) {
+                imageUri = savedImage;
+                showImage();
+            }
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (pendingCameraFile != null) {
+            outState.putString(STATE_PENDING_CAMERA, pendingCameraFile.getAbsolutePath());
+        }
+        if (!TextUtils.isEmpty(imageUri)) {
+            outState.putString(STATE_IMAGE_URI, imageUri);
+        }
     }
 
     /** Show only the controls relevant to the selected frequency type. */
@@ -227,11 +266,31 @@ public class EditHabitActivity extends Activity {
             return;
         }
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(intent, REQUEST_CAMERA);
-        } else {
+        if (intent.resolveActivity(getPackageManager()) == null) {
             Toast.makeText(this, "未找到可用相机", Toast.LENGTH_SHORT).show();
+            return;
         }
+        // Give the camera a real file to write the full-size image into, exposed through our
+        // FileProvider. Without EXTRA_OUTPUT the camera only returns a tiny thumbnail in the extras.
+        File target = newPhotoFile();
+        if (target == null) {
+            Toast.makeText(this, "图片目录创建失败", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        pendingCameraFile = target;
+        Uri outputUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", target);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, outputUri);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        startActivityForResult(intent, REQUEST_CAMERA);
+    }
+
+    /** Create an empty file under habit_photos for the camera to fill, or null if the dir fails. */
+    private File newPhotoFile() {
+        File imageDir = new File(getFilesDir(), "habit_photos");
+        if (!imageDir.exists() && !imageDir.mkdirs()) {
+            return null;
+        }
+        return new File(imageDir, "photo_" + System.currentTimeMillis() + ".jpg");
     }
 
     private void openGallery() {
@@ -257,16 +316,18 @@ public class EditHabitActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null) {
+        if (resultCode != RESULT_OK) {
             return;
         }
         if (requestCode == REQUEST_CAMERA) {
-            Bitmap bitmap = (Bitmap) data.getExtras().get("data");
-            if (bitmap != null) {
-                imageUri = saveBitmap(bitmap);
+            // With EXTRA_OUTPUT the camera writes the full-size image into pendingCameraFile and
+            // returns a null data Intent, so don't gate this branch on data being non-null.
+            if (pendingCameraFile != null && pendingCameraFile.exists() && pendingCameraFile.length() > 0) {
+                imageUri = Uri.fromFile(pendingCameraFile).toString();
                 showImage();
             }
-        } else if (requestCode == REQUEST_GALLERY && data.getData() != null) {
+            pendingCameraFile = null;
+        } else if (requestCode == REQUEST_GALLERY && data != null && data.getData() != null) {
             Uri uri = data.getData();
             try {
                 getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -275,22 +336,6 @@ public class EditHabitActivity extends Activity {
             }
             imageUri = uri.toString();
             showImage();
-        }
-    }
-
-    private String saveBitmap(Bitmap bitmap) {
-        File imageDir = new File(getFilesDir(), "habit_photos");
-        if (!imageDir.exists() && !imageDir.mkdirs()) {
-            Toast.makeText(this, "图片目录创建失败", Toast.LENGTH_SHORT).show();
-            return "";
-        }
-        File imageFile = new File(imageDir, "photo_" + System.currentTimeMillis() + ".jpg");
-        try (FileOutputStream outputStream = new FileOutputStream(imageFile)) {
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream);
-            return Uri.fromFile(imageFile).toString();
-        } catch (IOException e) {
-            Toast.makeText(this, "图片保存失败", Toast.LENGTH_SHORT).show();
-            return "";
         }
     }
 
@@ -360,10 +405,58 @@ public class EditHabitActivity extends Activity {
         if (success) {
             ReminderReceiver.schedule(this, dbHelper.getHabit(savedId));
             Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
-            finish();
+            // A reminder was set; on aggressive battery managers the alarm can be delayed or killed.
+            // Offer a one-time nudge to whitelist the app, then close regardless of the choice.
+            if (!TextUtils.isEmpty(reminderTime) && shouldOfferBatteryExemption()) {
+                promptBatteryExemption();
+            } else {
+                finish();
+            }
         } else {
             Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * Whether to nudge the user toward exempting the app from battery optimization. True only when
+     * the OS supports Doze (API 23+), the app isn't already exempt, and we haven't asked before —
+     * the prompt is a one-shot so it doesn't nag on every reminder edit.
+     */
+    private boolean shouldOfferBatteryExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return false;
+        }
+        if (getPreferences(MODE_PRIVATE).getBoolean(PREF_BATTERY_PROMPT_SHOWN, false)) {
+            return false;
+        }
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        return pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    /**
+     * Explain why reminders may be unreliable under battery optimization and, if the user agrees,
+     * open the system battery-optimization list. Closes the screen once the user has decided.
+     * Uses ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS (the list screen), which needs no special
+     * permission, rather than the direct request action.
+     */
+    private void promptBatteryExemption() {
+        getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_BATTERY_PROMPT_SHOWN, true).apply();
+        new AlertDialog.Builder(this)
+                .setTitle("让提醒更准时")
+                .setMessage("部分手机会在后台限制应用，可能导致打卡提醒延迟或收不到。"
+                        + "可在电池优化设置中将 DayMark 设为不优化。")
+                .setPositiveButton("去设置", (dialog, which) -> {
+                    try {
+                        startActivity(new Intent(
+                                Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                    } catch (ActivityNotFoundException e) {
+                        Toast.makeText(this, "未找到电池优化设置", Toast.LENGTH_SHORT).show();
+                    }
+                    finish();
+                })
+                .setNegativeButton("以后再说", (dialog, which) -> finish())
+                .setOnCancelListener(dialog -> finish())
+                .show();
     }
 
     /** Comma-separated ISO weekday numbers (1=Mon..7=Sun) for the checked toggles. */

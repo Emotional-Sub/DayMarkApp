@@ -194,18 +194,31 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * @return the matching user's id, or {@link #NO_USER} when the credentials are invalid.
      */
     public long login(String username, String password) {
-        SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.query("users", new String[]{"id", "password", "salt"},
+        long userId = NO_USER;
+        String storedHash = null;
+        String salt = "";
+        try (Cursor cursor = getReadableDatabase().query("users",
+                new String[]{"id", "password", "salt"},
                 "username=?", new String[]{username}, null, null, null)) {
             if (cursor.moveToFirst()) {
-                String storedHash = cursor.getString(1);
-                String salt = cursor.isNull(2) ? "" : cursor.getString(2);
+                storedHash = cursor.getString(1);
+                salt = cursor.isNull(2) ? "" : cursor.getString(2);
                 if (PasswordUtils.matches(password, salt, storedHash)) {
-                    return cursor.getLong(0);
+                    userId = cursor.getLong(0);
                 }
             }
-            return NO_USER;
         }
+        // Transparently upgrade a legacy salted-SHA-256 hash to PBKDF2 now that we have the
+        // plaintext in hand and have confirmed it matches. Done after the cursor is closed.
+        if (userId != NO_USER && PasswordUtils.isLegacy(storedHash)) {
+            String newSalt = PasswordUtils.newSalt();
+            ContentValues values = new ContentValues();
+            values.put("salt", newSalt);
+            values.put("password", PasswordUtils.hash(password, newSalt));
+            getWritableDatabase().update("users", values, "id=?",
+                    new String[]{String.valueOf(userId)});
+        }
+        return userId;
     }
 
     /**
@@ -282,10 +295,66 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         try (Cursor cursor = db.query("habits", null, finalWhere, finalArgs, null, null,
                 "sort_order ASC, id ASC")) {
             while (cursor.moveToNext()) {
-                habits.add(readHabit(cursor));
+                habits.add(readHabitBase(cursor));
             }
         }
+        // Fill the derived fields (streak/week/total/last note) in two batched queries for the
+        // whole list, rather than two per habit. Avoids an N+1 query storm on the main thread.
+        fillComputedBatch(db, habits);
         return habits;
+    }
+
+    /**
+     * Populate the runtime-computed fields for a whole list of habits using two queries total:
+     * one for every check-in (grouped into per-habit day sets) and one for the latest note per
+     * habit. Replaces the per-habit {@link #getCheckedDays}/{@link #getLastNote} calls.
+     */
+    private void fillComputedBatch(SQLiteDatabase db, List<Habit> habits) {
+        if (habits.isEmpty()) {
+            return;
+        }
+        StringBuilder idList = new StringBuilder();
+        for (int i = 0; i < habits.size(); i++) {
+            if (i > 0) {
+                idList.append(',');
+            }
+            idList.append(habits.get(i).id);
+        }
+        String inClause = "habit_id IN (" + idList + ")";
+
+        // habit_id -> distinct start-of-day timestamps checked in.
+        Map<Long, Set<Long>> daysByHabit = new HashMap<>();
+        try (Cursor cursor = db.query("check_records", new String[]{"habit_id", "checked_at"},
+                inClause, null, null, null, null)) {
+            int habitCol = cursor.getColumnIndexOrThrow("habit_id");
+            int atCol = cursor.getColumnIndexOrThrow("checked_at");
+            while (cursor.moveToNext()) {
+                long habitId = cursor.getLong(habitCol);
+                Set<Long> days = daysByHabit.get(habitId);
+                if (days == null) {
+                    days = new HashSet<>();
+                    daysByHabit.put(habitId, days);
+                }
+                days.add(DateUtils.startOfDay(cursor.getLong(atCol)));
+            }
+        }
+
+        // habit_id -> latest non-empty note. Ordered oldest-first so the last write per habit wins.
+        Map<Long, String> noteByHabit = new HashMap<>();
+        try (Cursor cursor = db.query("check_records", new String[]{"habit_id", "note"},
+                inClause + " AND note<>''", null, null, null, "checked_at ASC")) {
+            int habitCol = cursor.getColumnIndexOrThrow("habit_id");
+            int noteCol = cursor.getColumnIndexOrThrow("note");
+            while (cursor.moveToNext()) {
+                noteByHabit.put(cursor.getLong(habitCol), cursor.getString(noteCol));
+            }
+        }
+
+        for (Habit habit : habits) {
+            Set<Long> days = daysByHabit.get(habit.id);
+            String note = noteByHabit.get(habit.id);
+            fillComputed(habit, days == null ? new HashSet<>() : days, note == null ? "" : note);
+        }
     }
 
     public Habit getHabit(long id) {
@@ -379,29 +448,56 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return insertRecord(getWritableDatabase(), habitId, note, System.currentTimeMillis()) != NO_USER;
     }
 
+    /** Back-fill result: the operation failed (e.g. habit gone). */
+    public static final int BACKFILL_FAILED = 0;
+    /** Back-fill result: the day had no prior check-in, so a new one was credited. */
+    public static final int BACKFILL_ADDED = 1;
+    /** Back-fill result: the day was already checked in; the note was appended without re-crediting. */
+    public static final int BACKFILL_ALREADY_CHECKED = 2;
+
     /**
      * Add a make-up check-in for a chosen day (used by the calendar to fill in missed days).
      * Unlike {@link #markChecked}, the record is timestamped at noon of {@code dayStart} rather
      * than "now", so it lands squarely inside the intended day regardless of the current time.
-     * check_count is incremented; last_check_at only moves forward, so back-dating a missed day
-     * never clobbers a more recent check-in (which would wrongly reset the "checked today" state).
+     *
+     * <p>If the day already has a check-in for this habit, the record (note) is still stored, but
+     * check_count is NOT incremented: that day was already credited, and bumping the count again
+     * would drift the "累计次数" away from the actual number of checked days. last_check_at only
+     * ever moves forward, so back-dating a missed day never clobbers a more recent check-in (which
+     * would wrongly reset the "checked today" state).
      *
      * @param dayStart start-of-day timestamp of the day to credit
-     * @return true if the check-in was recorded
+     * @return one of {@link #BACKFILL_FAILED}, {@link #BACKFILL_ADDED}, {@link #BACKFILL_ALREADY_CHECKED}
      */
-    public boolean addCheckForDay(long habitId, String note, long dayStart) {
+    public int addCheckForDay(long habitId, String note, long dayStart) {
         Habit habit = getHabit(habitId);
         if (habit == null) {
-            return false;
+            return BACKFILL_FAILED;
         }
         long checkedAt = dayStart + DateUtils.DAY_MS / 2; // noon: safely within the day
         SQLiteDatabase db = getWritableDatabase();
+        boolean alreadyChecked = hasCheckOnDay(db, habitId, dayStart);
         insertRecord(db, habitId, note, checkedAt);
 
         ContentValues values = new ContentValues();
-        values.put("check_count", habit.checkCount + 1);
+        // Only credit a new day; appending to an already-checked day must not inflate the count.
+        if (!alreadyChecked) {
+            values.put("check_count", habit.checkCount + 1);
+        }
         values.put("last_check_at", Math.max(habit.lastCheckAt, checkedAt));
-        return db.update("habits", values, "id=?", new String[]{String.valueOf(habitId)}) > 0;
+        db.update("habits", values, "id=?", new String[]{String.valueOf(habitId)});
+        return alreadyChecked ? BACKFILL_ALREADY_CHECKED : BACKFILL_ADDED;
+    }
+
+    /** Whether the habit already has at least one check-in within [dayStart, dayStart+1day). */
+    private boolean hasCheckOnDay(SQLiteDatabase db, long habitId, long dayStart) {
+        long dayEnd = dayStart + DateUtils.DAY_MS;
+        try (Cursor cursor = db.query("check_records", new String[]{"id"},
+                "habit_id=? AND checked_at>=? AND checked_at<?",
+                new String[]{String.valueOf(habitId), String.valueOf(dayStart), String.valueOf(dayEnd)},
+                null, null, null, "1")) {
+            return cursor.moveToFirst();
+        }
     }
 
     /**
@@ -655,15 +751,25 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return builder.toString();
     }
 
+    /**
+     * Read a habit row into a {@link Habit}, querying its check-ins and latest note individually.
+     * Used for single-habit reads ({@link #getHabit}); list reads use {@link #readHabitBase} plus a
+     * single batched pass (see {@link #queryHabits}) to avoid a per-row query storm.
+     */
     private Habit readHabit(Cursor cursor) {
-        long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
-        int frequencyType = getInt(cursor, "frequency_type", Habit.FREQ_DAILY);
-        String frequencyDays = getString(cursor, "frequency_days", "");
-        int frequencyCount = getInt(cursor, "frequency_count", 0);
-        int targetDays = getInt(cursor, "target_days", 0);
-        int[] streakWeekTotal = computeStreakWeekTotal(id, frequencyType, frequencyDays, frequencyCount);
+        Habit habit = readHabitBase(cursor);
+        fillComputed(habit, getCheckedDays(habit.id), getLastNote(habit.id));
+        return habit;
+    }
+
+    /**
+     * Build a {@link Habit} from the row's stored columns only, leaving the derived fields
+     * (streak, week count, total days, last note) at their zero/empty defaults for a caller to
+     * fill via {@link #fillComputed}.
+     */
+    private Habit readHabitBase(Cursor cursor) {
         return new Habit(
-                id,
+                cursor.getLong(cursor.getColumnIndexOrThrow("id")),
                 cursor.getString(cursor.getColumnIndexOrThrow("title")),
                 cursor.getString(cursor.getColumnIndexOrThrow("content")),
                 cursor.getString(cursor.getColumnIndexOrThrow("time_text")),
@@ -673,15 +779,25 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 cursor.getInt(cursor.getColumnIndexOrThrow("check_count")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("last_check_at")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
-                streakWeekTotal[0],
-                getLastNote(id),
-                frequencyType,
-                frequencyDays,
-                frequencyCount,
-                targetDays,
-                streakWeekTotal[1],
-                streakWeekTotal[2]
+                0,
+                "",
+                getInt(cursor, "frequency_type", Habit.FREQ_DAILY),
+                getString(cursor, "frequency_days", ""),
+                getInt(cursor, "frequency_count", 0),
+                getInt(cursor, "target_days", 0),
+                0,
+                0
         );
+    }
+
+    /** Fill the runtime-computed fields (streak/week/total/last note) from a precomputed day set. */
+    private void fillComputed(Habit habit, Set<Long> checkedDays, String lastNote) {
+        int[] streakWeekTotal = computeStreakWeekTotal(checkedDays, habit.frequencyType,
+                habit.frequencyDays, habit.frequencyCount);
+        habit.streakDays = streakWeekTotal[0];
+        habit.weekCheckCount = streakWeekTotal[1];
+        habit.totalDays = streakWeekTotal[2];
+        habit.lastNote = lastNote;
     }
 
     private static int getInt(Cursor cursor, String column, int defaultValue) {
@@ -722,9 +838,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * @return {streakDays, weekCheckCount, totalDays} computed once from the habit's check days.
      * The streak unit/rules depend on the frequency type (see the helpers below).
      */
-    private int[] computeStreakWeekTotal(long habitId, int frequencyType, String frequencyDays,
+    private int[] computeStreakWeekTotal(Set<Long> days, int frequencyType, String frequencyDays,
                                          int frequencyCount) {
-        Set<Long> days = getCheckedDays(habitId);
         int total = days.size();
 
         long weekStart = DateUtils.startOfWeek(System.currentTimeMillis());

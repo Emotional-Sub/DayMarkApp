@@ -1,8 +1,11 @@
 package com.example.daymark;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Rect;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.Editable;
@@ -38,6 +41,9 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private static final int SORT_STREAK = 2;
     private static final int SORT_CREATED = 3;
 
+    /** Request code for the Android 13+ runtime notification permission prompt. */
+    private static final int REQUEST_POST_NOTIFICATIONS = 30;
+
     private DayMarkDbHelper dbHelper;
     private HabitAdapter adapter;
     private RecyclerView habitList;
@@ -52,6 +58,8 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private int sortMode = SORT_CUSTOM;
     private long userId = DayMarkDbHelper.NO_USER;
     private String username;
+    /** Bumped on every refresh; a background load only applies if it's still the latest request. */
+    private int refreshGeneration = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +95,10 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             return;
         }
         welcomeText.setText(username == null ? "我的打卡" : username + " 的打卡");
+
+        // Android 13+ requires an explicit runtime grant before any notification (incl. reminders)
+        // can be posted. Ask once on entry; if denied, reminders stay silent but the app still works.
+        requestNotificationPermissionIfNeeded();
 
         habitList.setLayoutManager(new LinearLayoutManager(this));
         habitList.setAdapter(adapter);
@@ -176,6 +188,32 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         refresh();
     }
 
+    /**
+     * On Android 13 (API 33)+ notifications need an explicit runtime permission; without it every
+     * reminder is silently dropped. Older versions grant it at install time, so we skip the prompt.
+     */
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    REQUEST_POST_NOTIFICATIONS);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_POST_NOTIFICATIONS
+                && (grantResults.length == 0
+                || grantResults[0] != PackageManager.PERMISSION_GRANTED)) {
+            Toast.makeText(this, "未授予通知权限，打卡提醒将无法弹出", Toast.LENGTH_LONG).show();
+        }
+    }
+
     @Override
     public void onEdit(Habit habit) {
         Intent intent = new Intent(this, EditHabitActivity.class);
@@ -200,27 +238,37 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     }
 
     private void refresh() {
-        String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
-        List<Habit> habits = dbHelper.searchHabits(keyword, filterMode, userId);
-        applySort(habits);
-        adapter.submitList(habits);
-        emptyView.setVisibility(habits.isEmpty() ? View.VISIBLE : View.GONE);
-        updateDragEnabled(keyword);
-
-        List<Habit> allHabits = dbHelper.getAllHabits(userId);
-        int totalChecks = 0;
-        int completedToday = 0;
-        int bestStreak = 0;
-        for (Habit habit : allHabits) {
-            totalChecks += habit.checkCount;
-            if (habit.isCheckedToday()) {
-                completedToday++;
+        final String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
+        final int generation = ++refreshGeneration;
+        AppExecutors.io().execute(() -> {
+            // All DB work happens here, off the UI thread.
+            List<Habit> habits = dbHelper.searchHabits(keyword, filterMode, userId);
+            applySort(habits);
+            List<Habit> allHabits = dbHelper.getAllHabits(userId);
+            int totalChecks = 0;
+            int completedToday = 0;
+            int bestStreak = 0;
+            for (Habit habit : allHabits) {
+                totalChecks += habit.checkCount;
+                if (habit.isCheckedToday()) {
+                    completedToday++;
+                }
+                bestStreak = Math.max(bestStreak, habit.streakDays);
             }
-            bestStreak = Math.max(bestStreak, habit.streakDays);
-        }
-        summaryText.setText(String.format(Locale.CHINA,
-                "共 %d 个事件，今日完成 %d 个，累计 %d 次，最高连续 %d 天",
-                allHabits.size(), completedToday, totalChecks, bestStreak));
+            String summary = String.format(Locale.CHINA,
+                    "共 %d 个事件，今日完成 %d 个，累计 %d 次，最高连续 %d 天",
+                    allHabits.size(), completedToday, totalChecks, bestStreak);
+            AppExecutors.main().execute(() -> {
+                // A newer refresh started while this one was running (e.g. fast typing); drop ours.
+                if (generation != refreshGeneration || isFinishing()) {
+                    return;
+                }
+                adapter.submitList(habits);
+                emptyView.setVisibility(habits.isEmpty() ? View.VISIBLE : View.GONE);
+                updateDragEnabled(keyword);
+                summaryText.setText(summary);
+            });
+        });
     }
 
     /**

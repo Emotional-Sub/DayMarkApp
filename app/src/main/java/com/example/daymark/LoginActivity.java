@@ -38,11 +38,15 @@ public class LoginActivity extends Activity {
     }
 
     private void loadRememberedAccount() {
+        // Older versions also persisted the plaintext password here; drop it if present so a
+        // previously-stored password never lingers in SharedPreferences.
+        if (preferences.contains("password")) {
+            preferences.edit().remove("password").apply();
+        }
         boolean remembered = preferences.getBoolean("remember", false);
         rememberCheck.setChecked(remembered);
         if (remembered) {
             usernameEdit.setText(preferences.getString("username", ""));
-            passwordEdit.setText(preferences.getString("password", ""));
         } else {
             usernameEdit.setText("demo");
             passwordEdit.setText("123456");
@@ -57,7 +61,7 @@ public class LoginActivity extends Activity {
         }
         long userId = dbHelper.login(username, password);
         if (userId != DayMarkDbHelper.NO_USER) {
-            saveRememberState(username, password);
+            saveRememberState(username);
             Intent intent = new Intent(this, MainActivity.class);
             intent.putExtra("user_id", userId);
             intent.putExtra("username", username);
@@ -93,16 +97,17 @@ public class LoginActivity extends Activity {
         return true;
     }
 
-    private void saveRememberState(String username, String password) {
+    private void saveRememberState(String username) {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean("remember", rememberCheck.isChecked());
         if (rememberCheck.isChecked()) {
+            // Only the username is remembered; the password is never persisted.
             editor.putString("username", username);
-            editor.putString("password", password);
         } else {
             editor.remove("username");
-            editor.remove("password");
         }
+        // Clear any plaintext password left by an older version regardless of the checkbox.
+        editor.remove("password");
         editor.apply();
     }
 }

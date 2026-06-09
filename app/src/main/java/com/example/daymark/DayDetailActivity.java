@@ -112,8 +112,13 @@ public class DayDetailActivity extends Activity {
                 .setView(input)
                 .setPositiveButton("保存", (dialog, which) -> {
                     String note = input.getText().toString().trim();
-                    if (dbHelper.addCheckForDay(habit.id, note, dayStart)) {
+                    int result = dbHelper.addCheckForDay(habit.id, note, dayStart);
+                    if (result == DayMarkDbHelper.BACKFILL_ADDED) {
                         Toast.makeText(this, "已补打卡", Toast.LENGTH_SHORT).show();
+                        loadRecords();
+                    } else if (result == DayMarkDbHelper.BACKFILL_ALREADY_CHECKED) {
+                        // The day was already credited; we only appended the note, no extra count.
+                        Toast.makeText(this, "当天已有打卡，已追加备注", Toast.LENGTH_SHORT).show();
                         loadRecords();
                     } else {
                         Toast.makeText(this, "补打卡失败", Toast.LENGTH_SHORT).show();

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Camera capture target: app-internal files dir, where habit photos are stored. -->
+    <files-path
+        name="habit_photos"
+        path="habit_photos/" />
+</paths>
