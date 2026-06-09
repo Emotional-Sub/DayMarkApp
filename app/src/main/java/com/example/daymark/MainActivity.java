@@ -49,6 +49,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         Button logoutButton = findViewById(R.id.logoutButton);
         Button calendarButton = findViewById(R.id.calendarButton);
         Button statsButton = findViewById(R.id.statsButton);
+        Button historyButton = findViewById(R.id.historyButton);
         Button exportButton = findViewById(R.id.exportButton);
         allButton = findViewById(R.id.allButton);
         todoButton = findViewById(R.id.todoButton);
@@ -87,6 +88,11 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         });
         statsButton.setOnClickListener(v -> {
             Intent intent = new Intent(this, StatsActivity.class);
+            intent.putExtra("user_id", userId);
+            startActivity(intent);
+        });
+        historyButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, HistoryActivity.class);
             intent.putExtra("user_id", userId);
             startActivity(intent);
         });

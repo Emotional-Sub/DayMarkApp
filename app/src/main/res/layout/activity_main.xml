@@ -141,6 +141,17 @@
             android:textSize="13sp" />
 
         <Button
+            android:id="@+id/historyButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_outline"
+            android:text="历史"
+            android:textColor="@color/brand_green"
+            android:textSize="13sp" />
+
+        <Button
             android:id="@+id/exportButton"
             android:layout_width="0dp"
             android:layout_height="40dp"

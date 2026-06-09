@@ -206,6 +206,22 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return queryHabits(userId, null, null);
     }
 
+    /**
+     * Every habit (across all users) that has a reminder time set. Used at boot to re-register
+     * alarms, which AlarmManager drops on reboot; there is no logged-in user at that point.
+     */
+    public List<Habit> getHabitsWithReminder() {
+        ArrayList<Habit> habits = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.query("habits", null, "reminder_time IS NOT NULL AND reminder_time<>''",
+                null, null, null, "id ASC")) {
+            while (cursor.moveToNext()) {
+                habits.add(readHabit(cursor));
+            }
+        }
+        return habits;
+    }
+
     public List<Habit> searchHabits(String keyword, int filterMode, long userId) {
         String where = null;
         String[] args = null;
