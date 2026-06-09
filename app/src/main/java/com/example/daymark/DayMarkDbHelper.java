@@ -517,6 +517,30 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return records;
     }
 
+    /** All check-in records for one day [dayStart, dayStart+1day), newest first. */
+    public List<CheckRecord> getRecordsForDay(long userId, long dayStart) {
+        ArrayList<CheckRecord> records = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        long dayEnd = dayStart + DateUtils.DAY_MS;
+        String sql = "SELECT r.id, r.habit_id, h.title, r.note, r.checked_at " +
+                "FROM check_records r JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=? AND r.checked_at>=? AND r.checked_at<? " +
+                "ORDER BY r.checked_at DESC";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId),
+                String.valueOf(dayStart), String.valueOf(dayEnd)})) {
+            while (cursor.moveToNext()) {
+                records.add(new CheckRecord(
+                        cursor.getLong(0),
+                        cursor.getLong(1),
+                        cursor.getString(2) == null ? "已删除事件" : cursor.getString(2),
+                        cursor.getString(3) == null ? "" : cursor.getString(3),
+                        cursor.getLong(4)
+                ));
+            }
+        }
+        return records;
+    }
+
     public int getTotalRecordCount(long userId) {
         SQLiteDatabase db = getReadableDatabase();
         String sql = "SELECT COUNT(*) FROM check_records r JOIN habits h ON r.habit_id=h.id " +
