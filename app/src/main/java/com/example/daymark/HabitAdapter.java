@@ -13,6 +13,7 @@ import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -72,12 +73,26 @@ public class HabitAdapter extends BaseAdapter {
         holder.titleText.setText(habit.title);
         holder.timeText.setText("时间：" + habit.timeText);
         holder.contentText.setText(habit.content);
-        holder.statusText.setText(habit.isCheckedToday() ? "今日已完成" : "今日待完成");
+        holder.statusText.setText(statusFor(habit));
         holder.metaText.setText("分类：" + habit.category +
-                "  |  连续 " + habit.streakDays + " 天" +
+                "  |  " + habit.frequencyLabel() +
+                "  |  " + habit.streakLabel() +
                 "  |  累计 " + habit.checkCount + " 次" +
                 (TextUtils.isEmpty(habit.reminderTime) ? "" : "  |  提醒 " + habit.reminderTime));
         holder.noteText.setText(TextUtils.isEmpty(habit.lastNote) ? "最近备注：暂无" : "最近备注：" + habit.lastNote);
+
+        if (habit.hasGoal()) {
+            holder.goalText.setVisibility(View.VISIBLE);
+            holder.goalProgress.setVisibility(View.VISIBLE);
+            holder.goalText.setText(habit.goalReached()
+                    ? "目标已达成：坚持 " + habit.targetDays + " 天 🎉"
+                    : "目标进度：" + habit.totalDays + " / " + habit.targetDays + " 天（"
+                            + habit.goalProgress() + "%）");
+            holder.goalProgress.setProgress(habit.goalProgress());
+        } else {
+            holder.goalText.setVisibility(View.GONE);
+            holder.goalProgress.setVisibility(View.GONE);
+        }
 
         if (!TextUtils.isEmpty(habit.imageUri)) {
             holder.photoView.setVisibility(View.VISIBLE);
@@ -101,6 +116,17 @@ public class HabitAdapter extends BaseAdapter {
         holder.editButton.setOnClickListener(v -> listener.onEdit(habit));
         holder.deleteButton.setOnClickListener(v -> confirmDelete(habit));
         return convertView;
+    }
+
+    /** Status line reflecting today's schedule: done, due, or not scheduled today. */
+    private String statusFor(Habit habit) {
+        if (habit.isCheckedToday()) {
+            return "今日已完成";
+        }
+        if (!habit.isScheduledToday()) {
+            return "今日无需打卡";
+        }
+        return "今日待完成";
     }
 
     private void showCheckDialog(Habit habit) {
@@ -184,6 +210,8 @@ public class HabitAdapter extends BaseAdapter {
         final TextView contentText;
         final TextView noteText;
         final TextView statusText;
+        final TextView goalText;
+        final ProgressBar goalProgress;
         final ImageView photoView;
         final Button doneButton;
         final Button undoButton;
@@ -198,6 +226,8 @@ public class HabitAdapter extends BaseAdapter {
             contentText = view.findViewById(R.id.contentText);
             noteText = view.findViewById(R.id.noteText);
             statusText = view.findViewById(R.id.statusText);
+            goalText = view.findViewById(R.id.goalText);
+            goalProgress = view.findViewById(R.id.goalProgress);
             photoView = view.findViewById(R.id.photoView);
             doneButton = view.findViewById(R.id.doneButton);
             undoButton = view.findViewById(R.id.undoButton);

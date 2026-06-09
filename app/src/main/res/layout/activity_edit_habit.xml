@@ -65,6 +65,143 @@
             android:background="@drawable/bg_input"
             android:paddingHorizontal="10dp" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="打卡频率"
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
+
+        <Spinner
+            android:id="@+id/frequencySpinner"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_input"
+            android:paddingHorizontal="10dp" />
+
+        <!-- Shown only for "每周指定星期" (FREQ_WEEKLY_DAYS). -->
+        <LinearLayout
+            android:id="@+id/weekdayRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ToggleButton
+                android:id="@+id/dayMon"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="一"
+                android:textOn="一"
+                android:textSize="13sp" />
+
+            <ToggleButton
+                android:id="@+id/dayTue"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="二"
+                android:textOn="二"
+                android:textSize="13sp" />
+
+            <ToggleButton
+                android:id="@+id/dayWed"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="三"
+                android:textOn="三"
+                android:textSize="13sp" />
+
+            <ToggleButton
+                android:id="@+id/dayThu"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="四"
+                android:textOn="四"
+                android:textSize="13sp" />
+
+            <ToggleButton
+                android:id="@+id/dayFri"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="五"
+                android:textOn="五"
+                android:textSize="13sp" />
+
+            <ToggleButton
+                android:id="@+id/daySat"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="六"
+                android:textOn="六"
+                android:textSize="13sp" />
+
+            <ToggleButton
+                android:id="@+id/daySun"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_input"
+                android:textColor="@color/ink"
+                android:textOff="日"
+                android:textOn="日"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Shown only for "每周N次" (FREQ_WEEKLY_COUNT). -->
+        <EditText
+            android:id="@+id/frequencyCountEdit"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_input"
+            android:hint="每周打卡次数，例如 3"
+            android:inputType="number"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted"
+            android:visibility="gone" />
+
+        <EditText
+            android:id="@+id/targetDaysEdit"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:hint="目标坚持天数，可不填，例如 21"
+            android:inputType="number"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="@color/ink"
+            android:textColorHint="@color/muted" />
+
         <EditText
             android:id="@+id/reminderEdit"
             android:layout_width="match_parent"

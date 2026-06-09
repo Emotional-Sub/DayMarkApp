@@ -9,14 +9,16 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.text.TextUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
-    private static final int DB_VERSION = 3;
+    private static final int DB_VERSION = 4;
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
@@ -30,7 +32,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE users (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "username TEXT UNIQUE NOT NULL," +
-                "password TEXT NOT NULL)");
+                "password TEXT NOT NULL," +
+                "salt TEXT)");
         db.execSQL("CREATE TABLE habits (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "user_id INTEGER NOT NULL DEFAULT 1," +
@@ -42,7 +45,11 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 "reminder_time TEXT," +
                 "check_count INTEGER NOT NULL DEFAULT 0," +
                 "last_check_at INTEGER NOT NULL DEFAULT 0," +
-                "created_at INTEGER NOT NULL)");
+                "created_at INTEGER NOT NULL," +
+                "frequency_type INTEGER NOT NULL DEFAULT 0," +
+                "frequency_days TEXT," +
+                "frequency_count INTEGER NOT NULL DEFAULT 0," +
+                "target_days INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE check_records (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "habit_id INTEGER NOT NULL," +
@@ -64,14 +71,60 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 db.execSQL("DROP TABLE IF EXISTS habits");
                 db.execSQL("DROP TABLE IF EXISTS users");
                 onCreate(db);
+                return; // onCreate already builds the latest (v4) schema with seeded data.
             }
+        }
+        // v4 added per-habit frequency/goal columns and salted password hashing.
+        if (oldVersion < 4) {
+            addColumnQuietly(db, "habits", "frequency_type INTEGER NOT NULL DEFAULT 0");
+            addColumnQuietly(db, "habits", "frequency_days TEXT");
+            addColumnQuietly(db, "habits", "frequency_count INTEGER NOT NULL DEFAULT 0");
+            addColumnQuietly(db, "habits", "target_days INTEGER NOT NULL DEFAULT 0");
+            addColumnQuietly(db, "users", "salt TEXT");
+            migratePlaintextPasswords(db);
+        }
+    }
+
+    private void addColumnQuietly(SQLiteDatabase db, String table, String columnDef) {
+        try {
+            db.execSQL("ALTER TABLE " + table + " ADD COLUMN " + columnDef);
+        } catch (SQLException ignored) {
+            // Column already exists; safe to continue the upgrade.
+        }
+    }
+
+    /**
+     * Convert any user rows still holding a plaintext password (no salt) into a salted hash.
+     * Reads everything first, then writes, so the cursor is closed before the updates run.
+     */
+    private void migratePlaintextPasswords(SQLiteDatabase db) {
+        ArrayList<Long> ids = new ArrayList<>();
+        ArrayList<String> plaintexts = new ArrayList<>();
+        try (Cursor cursor = db.query("users", new String[]{"id", "password", "salt"},
+                null, null, null, null, null)) {
+            while (cursor.moveToNext()) {
+                String salt = cursor.isNull(2) ? "" : cursor.getString(2);
+                if (TextUtils.isEmpty(salt)) {
+                    ids.add(cursor.getLong(0));
+                    plaintexts.add(cursor.getString(1) == null ? "" : cursor.getString(1));
+                }
+            }
+        }
+        for (int i = 0; i < ids.size(); i++) {
+            String salt = PasswordUtils.newSalt();
+            ContentValues values = new ContentValues();
+            values.put("salt", salt);
+            values.put("password", PasswordUtils.hash(plaintexts.get(i), salt));
+            db.update("users", values, "id=?", new String[]{String.valueOf(ids.get(i))});
         }
     }
 
     private void insertDefaultData(SQLiteDatabase db) {
+        String salt = PasswordUtils.newSalt();
         ContentValues user = new ContentValues();
         user.put("username", "demo");
-        user.put("password", "123456");
+        user.put("password", PasswordUtils.hash("123456", salt));
+        user.put("salt", salt);
         long demoId = db.insert("users", null, user);
         if (demoId == NO_USER) {
             demoId = 1;
@@ -79,9 +132,11 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
         long now = System.currentTimeMillis();
         long readId = insertHabit(db, demoId, "晨间阅读", "每天阅读 20 分钟，记录一句喜欢的话。", "每天 07:30",
-                "", "学习", "07:30", 3, now - DateUtils.DAY_MS, now);
-        long sportId = insertHabit(db, demoId, "运动打卡", "完成一次散步、跑步或拉伸，让身体醒过来。", "每天 18:30",
-                "", "运动", "18:30", 1, now, now + 1);
+                "", "学习", "07:30", 3, now - DateUtils.DAY_MS, now,
+                Habit.FREQ_DAILY, "", 0, 21);
+        long sportId = insertHabit(db, demoId, "运动打卡", "完成一次散步、跑步或拉伸，让身体醒过来。", "每周三次",
+                "", "运动", "18:30", 1, now, now + 1,
+                Habit.FREQ_WEEKLY_COUNT, "", 3, 0);
         insertRecord(db, readId, "读完一章，状态不错。", now - DateUtils.DAY_MS);
         insertRecord(db, readId, "今天继续阅读。", now - 2 * DateUtils.DAY_MS);
         insertRecord(db, sportId, "散步 30 分钟。", now);
@@ -89,7 +144,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
     private long insertHabit(SQLiteDatabase db, long userId, String title, String content, String timeText,
                              String imageUri, String category, String reminderTime, int checkCount,
-                             long lastCheckAt, long createdAt) {
+                             long lastCheckAt, long createdAt, int frequencyType, String frequencyDays,
+                             int frequencyCount, int targetDays) {
         ContentValues values = new ContentValues();
         values.put("user_id", userId);
         values.put("title", title);
@@ -101,6 +157,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         values.put("check_count", checkCount);
         values.put("last_check_at", lastCheckAt);
         values.put("created_at", createdAt);
+        values.put("frequency_type", frequencyType);
+        values.put("frequency_days", frequencyDays);
+        values.put("frequency_count", frequencyCount);
+        values.put("target_days", targetDays);
         return db.insert("habits", null, values);
     }
 
@@ -117,10 +177,16 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      */
     public long login(String username, String password) {
         SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.query("users", new String[]{"id"},
-                "username=? AND password=?", new String[]{username, password},
-                null, null, null)) {
-            return cursor.moveToFirst() ? cursor.getLong(0) : NO_USER;
+        try (Cursor cursor = db.query("users", new String[]{"id", "password", "salt"},
+                "username=?", new String[]{username}, null, null, null)) {
+            if (cursor.moveToFirst()) {
+                String storedHash = cursor.getString(1);
+                String salt = cursor.isNull(2) ? "" : cursor.getString(2);
+                if (PasswordUtils.matches(password, salt, storedHash)) {
+                    return cursor.getLong(0);
+                }
+            }
+            return NO_USER;
         }
     }
 
@@ -128,9 +194,11 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * @return the new user's id, or {@link #NO_USER} when the username already exists.
      */
     public long register(String username, String password) {
+        String salt = PasswordUtils.newSalt();
         ContentValues values = new ContentValues();
         values.put("username", username);
-        values.put("password", password);
+        values.put("password", PasswordUtils.hash(password, salt));
+        values.put("salt", salt);
         return getWritableDatabase().insert("users", null, values);
     }
 
@@ -149,7 +217,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         List<Habit> habits = queryHabits(userId, where, args);
         ArrayList<Habit> filtered = new ArrayList<>();
         for (Habit habit : habits) {
-            if (filterMode == 1 && habit.isCheckedToday()) {
+            // "今日待完成" = scheduled today and not yet checked; "今日已完成" = checked today.
+            if (filterMode == 1 && !habit.isDueToday()) {
                 continue;
             }
             if (filterMode == 2 && !habit.isCheckedToday()) {
@@ -195,13 +264,16 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     public long addHabit(long userId, String title, String content, String timeText, String imageUri,
-                         String category, String reminderTime) {
+                         String category, String reminderTime, int frequencyType, String frequencyDays,
+                         int frequencyCount, int targetDays) {
         return insertHabit(getWritableDatabase(), userId, title, content, timeText, imageUri,
-                category, reminderTime, 0, 0, System.currentTimeMillis());
+                category, reminderTime, 0, 0, System.currentTimeMillis(),
+                frequencyType, frequencyDays, frequencyCount, targetDays);
     }
 
     public boolean updateHabit(long id, String title, String content, String timeText, String imageUri,
-                               String category, String reminderTime) {
+                               String category, String reminderTime, int frequencyType,
+                               String frequencyDays, int frequencyCount, int targetDays) {
         ContentValues values = new ContentValues();
         values.put("title", title);
         values.put("content", content);
@@ -209,6 +281,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         values.put("image_uri", imageUri);
         values.put("category", category);
         values.put("reminder_time", reminderTime);
+        values.put("frequency_type", frequencyType);
+        values.put("frequency_days", frequencyDays);
+        values.put("frequency_count", frequencyCount);
+        values.put("target_days", targetDays);
         return getWritableDatabase().update("habits", values, "id=?",
                 new String[]{String.valueOf(id)}) > 0;
     }
@@ -292,10 +368,24 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      */
     public boolean changePassword(long userId, String oldPassword, String newPassword) {
         SQLiteDatabase db = getWritableDatabase();
+        String storedHash;
+        String salt;
+        try (Cursor cursor = db.query("users", new String[]{"password", "salt"}, "id=?",
+                new String[]{String.valueOf(userId)}, null, null, null)) {
+            if (!cursor.moveToFirst()) {
+                return false;
+            }
+            storedHash = cursor.getString(0);
+            salt = cursor.isNull(1) ? "" : cursor.getString(1);
+        }
+        if (!PasswordUtils.matches(oldPassword, salt, storedHash)) {
+            return false;
+        }
+        String newSalt = PasswordUtils.newSalt();
         ContentValues values = new ContentValues();
-        values.put("password", newPassword);
-        return db.update("users", values, "id=? AND password=?",
-                new String[]{String.valueOf(userId), oldPassword}) > 0;
+        values.put("salt", newSalt);
+        values.put("password", PasswordUtils.hash(newPassword, newSalt));
+        return db.update("users", values, "id=?", new String[]{String.valueOf(userId)}) > 0;
     }
 
     /**
@@ -361,6 +451,70 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    /**
+     * Number of check-in records per day for the user within [fromInclusive, toExclusive),
+     * keyed by start-of-day timestamp. Days with no check-ins are simply absent from the map.
+     * One query backs the whole heatmap rather than one query per day.
+     */
+    public Map<Long, Integer> getDailyCheckCounts(long userId, long fromInclusive, long toExclusive) {
+        Map<Long, Integer> counts = new HashMap<>();
+        SQLiteDatabase db = getReadableDatabase();
+        String sql = "SELECT r.checked_at FROM check_records r JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=? AND r.checked_at>=? AND r.checked_at<?";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId),
+                String.valueOf(fromInclusive), String.valueOf(toExclusive)})) {
+            while (cursor.moveToNext()) {
+                long day = DateUtils.startOfDay(cursor.getLong(0));
+                Integer existing = counts.get(day);
+                counts.put(day, existing == null ? 1 : existing + 1);
+            }
+        }
+        return counts;
+    }
+
+    /** Per-category summary (habit count + total check-ins) for the profile page. */
+    public List<CategoryStat> getCategoryStats(long userId) {
+        ArrayList<CategoryStat> stats = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        String sql = "SELECT h.category, COUNT(DISTINCT h.id), COUNT(r.id) " +
+                "FROM habits h LEFT JOIN check_records r ON r.habit_id=h.id " +
+                "WHERE h.user_id=? GROUP BY h.category ORDER BY COUNT(r.id) DESC, h.category ASC";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId)})) {
+            while (cursor.moveToNext()) {
+                stats.add(new CategoryStat(cursor.getString(0), cursor.getInt(1), cursor.getInt(2)));
+            }
+        }
+        return stats;
+    }
+
+    /**
+     * Milestone list derived from the user's current aggregate data. Recomputed on each call,
+     * so it always reflects reality without a separate achievements table.
+     */
+    public List<Achievement> getAchievements(long userId) {
+        List<Habit> habits = getAllHabits(userId);
+        int totalRecords = getTotalRecordCount(userId);
+        int bestStreak = 0;
+        Set<String> categories = new HashSet<>();
+        boolean anyGoalReached = false;
+        for (Habit habit : habits) {
+            bestStreak = Math.max(bestStreak, habit.streakDays);
+            categories.add(habit.category);
+            if (habit.goalReached()) {
+                anyGoalReached = true;
+            }
+        }
+
+        ArrayList<Achievement> list = new ArrayList<>();
+        list.add(new Achievement("初次打卡", "完成第一次打卡", totalRecords >= 1));
+        list.add(new Achievement("坚持一周", "连续打卡达到 7 天", bestStreak >= 7));
+        list.add(new Achievement("坚持一月", "连续打卡达到 30 天", bestStreak >= 30));
+        list.add(new Achievement("百次达成", "累计打卡满 100 次", totalRecords >= 100));
+        list.add(new Achievement("多面手", "创建至少 3 个不同分类的事件", categories.size() >= 3));
+        list.add(new Achievement("目标达成", "完成一个事件设定的坚持目标", anyGoalReached));
+        return list;
+    }
+
     public String buildExportText(long userId) {
         StringBuilder builder = new StringBuilder();
         builder.append("DayMark 打卡记录导出\n\n");
@@ -368,9 +522,13 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             builder.append("事件：").append(habit.title).append('\n');
             builder.append("分类：").append(habit.category).append('\n');
             builder.append("时间：").append(habit.timeText).append('\n');
+            builder.append("频率：").append(habit.frequencyLabel()).append('\n');
             builder.append("提醒：").append(TextUtils.isEmpty(habit.reminderTime) ? "未设置" : habit.reminderTime).append('\n');
-            builder.append("累计：").append(habit.checkCount).append(" 次，连续 ")
-                    .append(habit.streakDays).append(" 天\n");
+            builder.append("累计：").append(habit.checkCount).append(" 次，").append(habit.streakLabel()).append('\n');
+            if (habit.hasGoal()) {
+                builder.append("目标：坚持 ").append(habit.targetDays).append(" 天（已完成 ")
+                        .append(habit.totalDays).append(" 天，").append(habit.goalProgress()).append("%）\n");
+            }
             builder.append("内容：").append(habit.content).append("\n\n");
         }
         builder.append("详细打卡记录\n");
@@ -388,6 +546,11 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
     private Habit readHabit(Cursor cursor) {
         long id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+        int frequencyType = getInt(cursor, "frequency_type", Habit.FREQ_DAILY);
+        String frequencyDays = getString(cursor, "frequency_days", "");
+        int frequencyCount = getInt(cursor, "frequency_count", 0);
+        int targetDays = getInt(cursor, "target_days", 0);
+        int[] streakWeekTotal = computeStreakWeekTotal(id, frequencyType, frequencyDays, frequencyCount);
         return new Habit(
                 id,
                 cursor.getString(cursor.getColumnIndexOrThrow("title")),
@@ -399,9 +562,25 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 cursor.getInt(cursor.getColumnIndexOrThrow("check_count")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("last_check_at")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
-                calculateStreakDays(id),
-                getLastNote(id)
+                streakWeekTotal[0],
+                getLastNote(id),
+                frequencyType,
+                frequencyDays,
+                frequencyCount,
+                targetDays,
+                streakWeekTotal[1],
+                streakWeekTotal[2]
         );
+    }
+
+    private static int getInt(Cursor cursor, String column, int defaultValue) {
+        int index = cursor.getColumnIndex(column);
+        return (index < 0 || cursor.isNull(index)) ? defaultValue : cursor.getInt(index);
+    }
+
+    private static String getString(Cursor cursor, String column, String defaultValue) {
+        int index = cursor.getColumnIndex(column);
+        return (index < 0 || cursor.isNull(index)) ? defaultValue : cursor.getString(index);
     }
 
     private String getLastNote(long habitId) {
@@ -415,25 +594,117 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
-    private int calculateStreakDays(long habitId) {
+    /** Distinct start-of-day timestamps on which this habit was checked in. */
+    private Set<Long> getCheckedDays(long habitId) {
         Set<Long> days = new HashSet<>();
         SQLiteDatabase db = getReadableDatabase();
         try (Cursor cursor = db.query("check_records", new String[]{"checked_at"}, "habit_id=?",
-                new String[]{String.valueOf(habitId)}, null, null, "checked_at DESC")) {
+                new String[]{String.valueOf(habitId)}, null, null, null)) {
             while (cursor.moveToNext()) {
                 days.add(DateUtils.startOfDay(cursor.getLong(0)));
             }
         }
-        long cursorDay = DateUtils.startOfDay(System.currentTimeMillis());
-        if (!days.contains(cursorDay)) {
-            cursorDay -= DateUtils.DAY_MS;
+        return days;
+    }
+
+    /**
+     * @return {streakDays, weekCheckCount, totalDays} computed once from the habit's check days.
+     * The streak unit/rules depend on the frequency type (see the helpers below).
+     */
+    private int[] computeStreakWeekTotal(long habitId, int frequencyType, String frequencyDays,
+                                         int frequencyCount) {
+        Set<Long> days = getCheckedDays(habitId);
+        int total = days.size();
+
+        long weekStart = DateUtils.startOfWeek(System.currentTimeMillis());
+        long weekEnd = weekStart + 7 * DateUtils.DAY_MS;
+        int weekCount = 0;
+        for (long day : days) {
+            if (day >= weekStart && day < weekEnd) {
+                weekCount++;
+            }
+        }
+
+        int streak = (frequencyType == Habit.FREQ_WEEKLY_COUNT)
+                ? weeklyCountStreak(days, Math.max(1, frequencyCount))
+                : dayBasedStreak(days, frequencyType, parseDayNumbers(frequencyDays));
+        return new int[]{streak, weekCount, total};
+    }
+
+    /**
+     * Streak in days for daily / specific-weekday habits. Walks backwards from today (skipping
+     * today if it isn't checked yet, since it may still be pending). For weekday habits, days
+     * not on the schedule are skipped; a scheduled day with no check-in ends the streak.
+     */
+    private int dayBasedStreak(Set<Long> days, int frequencyType, Set<Integer> scheduledDays) {
+        boolean weeklyDays = frequencyType == Habit.FREQ_WEEKLY_DAYS && !scheduledDays.isEmpty();
+        long cursor = DateUtils.startOfDay(System.currentTimeMillis());
+        if (!days.contains(cursor)) {
+            // Today not checked yet; don't count it as a miss, just start from yesterday.
+            cursor -= DateUtils.DAY_MS;
         }
         int streak = 0;
-        while (days.contains(cursorDay)) {
-            streak++;
-            cursorDay -= DateUtils.DAY_MS;
+        for (int guard = 0; guard < 4000; guard++) {
+            if (weeklyDays && !scheduledDays.contains(DateUtils.isoDayOfWeek(cursor))) {
+                cursor -= DateUtils.DAY_MS;
+                continue;
+            }
+            if (days.contains(cursor)) {
+                streak++;
+                cursor -= DateUtils.DAY_MS;
+            } else {
+                break;
+            }
         }
         return streak;
+    }
+
+    /**
+     * Streak in weeks for "N times per week" habits: consecutive weeks (Mon-based) meeting the
+     * target count. The current week is only counted once the target is met; otherwise it's
+     * treated as in-progress and the streak is measured from the previous week.
+     */
+    private int weeklyCountStreak(Set<Long> days, int target) {
+        Map<Long, Integer> perWeek = new HashMap<>();
+        for (long day : days) {
+            long week = DateUtils.startOfWeek(day);
+            Integer existing = perWeek.get(week);
+            perWeek.put(week, existing == null ? 1 : existing + 1);
+        }
+        long weekCursor = DateUtils.startOfWeek(System.currentTimeMillis());
+        Integer current = perWeek.get(weekCursor);
+        if (current == null || current < target) {
+            weekCursor -= 7 * DateUtils.DAY_MS;
+        }
+        int streak = 0;
+        for (int guard = 0; guard < 1000; guard++) {
+            Integer count = perWeek.get(weekCursor);
+            if (count != null && count >= target) {
+                streak++;
+                weekCursor -= 7 * DateUtils.DAY_MS;
+            } else {
+                break;
+            }
+        }
+        return streak;
+    }
+
+    private static Set<Integer> parseDayNumbers(String frequencyDays) {
+        Set<Integer> days = new HashSet<>();
+        if (TextUtils.isEmpty(frequencyDays)) {
+            return days;
+        }
+        for (String part : frequencyDays.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    days.add(Integer.parseInt(trimmed));
+                } catch (NumberFormatException ignored) {
+                    // Skip malformed entries.
+                }
+            }
+        }
+        return days;
     }
 
     public String buildWeekSummary(long userId) {

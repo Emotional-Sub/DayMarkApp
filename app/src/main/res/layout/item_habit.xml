@@ -64,6 +64,27 @@
         android:textColor="@color/muted"
         android:textSize="13sp" />
 
+    <!-- Goal progress; shown only when the habit has a target (see HabitAdapter). -->
+    <TextView
+        android:id="@+id/goalText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="@color/brand_green"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <ProgressBar
+        android:id="@+id/goalProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:max="100"
+        android:progressTint="@color/brand_green"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/photoView"
         android:layout_width="match_parent"

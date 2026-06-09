@@ -21,6 +21,28 @@ public class DateUtils {
         return calendar.getTimeInMillis();
     }
 
+    /** Start-of-day timestamp for the Monday of the week containing {@code time}. */
+    public static long startOfWeek(long time) {
+        Calendar calendar = Calendar.getInstance(Locale.CHINA);
+        calendar.setTimeInMillis(startOfDay(time));
+        int dow = calendar.get(Calendar.DAY_OF_WEEK);
+        // Calendar.SUNDAY == 1 ... SATURDAY == 7; we treat Monday as the first day.
+        int daysFromMonday = (dow == Calendar.SUNDAY) ? 6 : dow - Calendar.MONDAY;
+        calendar.add(Calendar.DAY_OF_MONTH, -daysFromMonday);
+        return calendar.getTimeInMillis();
+    }
+
+    /**
+     * Day-of-week as 1=Monday ... 7=Sunday (ISO order), matching how habit
+     * frequency days are stored.
+     */
+    public static int isoDayOfWeek(long time) {
+        Calendar calendar = Calendar.getInstance(Locale.CHINA);
+        calendar.setTimeInMillis(time);
+        int dow = calendar.get(Calendar.DAY_OF_WEEK);
+        return (dow == Calendar.SUNDAY) ? 7 : dow - 1;
+    }
+
     public static boolean isToday(long time) {
         return time > 0 && startOfDay(time) == startOfDay(System.currentTimeMillis());
     }
