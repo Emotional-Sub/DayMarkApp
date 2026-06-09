@@ -380,6 +380,31 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Add a make-up check-in for a chosen day (used by the calendar to fill in missed days).
+     * Unlike {@link #markChecked}, the record is timestamped at noon of {@code dayStart} rather
+     * than "now", so it lands squarely inside the intended day regardless of the current time.
+     * check_count is incremented; last_check_at only moves forward, so back-dating a missed day
+     * never clobbers a more recent check-in (which would wrongly reset the "checked today" state).
+     *
+     * @param dayStart start-of-day timestamp of the day to credit
+     * @return true if the check-in was recorded
+     */
+    public boolean addCheckForDay(long habitId, String note, long dayStart) {
+        Habit habit = getHabit(habitId);
+        if (habit == null) {
+            return false;
+        }
+        long checkedAt = dayStart + DateUtils.DAY_MS / 2; // noon: safely within the day
+        SQLiteDatabase db = getWritableDatabase();
+        insertRecord(db, habitId, note, checkedAt);
+
+        ContentValues values = new ContentValues();
+        values.put("check_count", habit.checkCount + 1);
+        values.put("last_check_at", Math.max(habit.lastCheckAt, checkedAt));
+        return db.update("habits", values, "id=?", new String[]{String.valueOf(habitId)}) > 0;
+    }
+
+    /**
      * Undo the most recent check-in made today for the given habit. Deletes that record,
      * decrements the cached check_count, and resets last_check_at to the newest remaining
      * record (0 if none remain) so the "checked today" state is restored correctly.
