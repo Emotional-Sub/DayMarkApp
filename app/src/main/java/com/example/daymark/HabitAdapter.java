@@ -9,7 +9,6 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -17,10 +16,14 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-public class HabitAdapter extends BaseAdapter {
+public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> {
     public interface HabitActionListener {
         void onEdit(Habit habit);
 
@@ -36,21 +39,36 @@ public class HabitAdapter extends BaseAdapter {
         this.context = context;
         this.dbHelper = dbHelper;
         this.listener = listener;
+        setHasStableIds(true);
     }
 
     public void submitList(List<Habit> habits) {
-        data = habits;
+        data = habits == null ? new ArrayList<>() : habits;
         notifyDataSetChanged();
     }
 
-    @Override
-    public int getCount() {
-        return data.size();
+    /** Current ids in display order, for persisting a manual drag reorder. */
+    public List<Long> currentOrderIds() {
+        List<Long> ids = new ArrayList<>(data.size());
+        for (Habit habit : data) {
+            ids.add(habit.id);
+        }
+        return ids;
+    }
+
+    /** Swap two rows during a drag and animate the move; persistence happens on drop. */
+    public void onItemMove(int fromPosition, int toPosition) {
+        if (fromPosition < 0 || toPosition < 0
+                || fromPosition >= data.size() || toPosition >= data.size()) {
+            return;
+        }
+        Collections.swap(data, fromPosition, toPosition);
+        notifyItemMoved(fromPosition, toPosition);
     }
 
     @Override
-    public Habit getItem(int position) {
-        return data.get(position);
+    public int getItemCount() {
+        return data.size();
     }
 
     @Override
@@ -58,18 +76,16 @@ public class HabitAdapter extends BaseAdapter {
         return data.get(position).id;
     }
 
+    @NonNull
     @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        ViewHolder holder;
-        if (convertView == null) {
-            convertView = LayoutInflater.from(context).inflate(R.layout.item_habit, parent, false);
-            holder = new ViewHolder(convertView);
-            convertView.setTag(holder);
-        } else {
-            holder = (ViewHolder) convertView.getTag();
-        }
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(context).inflate(R.layout.item_habit, parent, false);
+        return new ViewHolder(view);
+    }
 
-        Habit habit = getItem(position);
+    @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        Habit habit = data.get(position);
         holder.titleText.setText(habit.title);
         holder.timeText.setText("时间：" + habit.timeText);
         holder.contentText.setText(habit.content);
@@ -115,7 +131,6 @@ public class HabitAdapter extends BaseAdapter {
         holder.noteButton.setOnClickListener(v -> showNoteDialog(habit));
         holder.editButton.setOnClickListener(v -> listener.onEdit(habit));
         holder.deleteButton.setOnClickListener(v -> confirmDelete(habit));
-        return convertView;
     }
 
     /** Status line reflecting today's schedule: done, due, or not scheduled today. */
@@ -203,7 +218,7 @@ public class HabitAdapter extends BaseAdapter {
                 .show();
     }
 
-    private static class ViewHolder {
+    static class ViewHolder extends RecyclerView.ViewHolder {
         final TextView titleText;
         final TextView timeText;
         final TextView metaText;
@@ -220,6 +235,7 @@ public class HabitAdapter extends BaseAdapter {
         final Button deleteButton;
 
         ViewHolder(View view) {
+            super(view);
             titleText = view.findViewById(R.id.titleText);
             timeText = view.findViewById(R.id.timeText);
             metaText = view.findViewById(R.id.metaText);

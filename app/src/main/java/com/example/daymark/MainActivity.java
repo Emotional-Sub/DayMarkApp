@@ -2,32 +2,54 @@ package com.example.daymark;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ListView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity implements HabitAdapter.HabitActionListener {
+    /** Sort modes, matching the order of the sort spinner entries. */
+    private static final int SORT_CUSTOM = 0;
+    private static final int SORT_DUE_FIRST = 1;
+    private static final int SORT_STREAK = 2;
+    private static final int SORT_CREATED = 3;
+
     private DayMarkDbHelper dbHelper;
     private HabitAdapter adapter;
+    private RecyclerView habitList;
+    private View emptyView;
     private TextView summaryText;
     private EditText searchEdit;
     private Button allButton;
     private Button todoButton;
     private Button doneTodayButton;
+    private ItemTouchHelper itemTouchHelper;
     private int filterMode = 0;
+    private int sortMode = SORT_CUSTOM;
     private long userId = DayMarkDbHelper.NO_USER;
     private String username;
 
@@ -42,8 +64,9 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         TextView welcomeText = findViewById(R.id.welcomeText);
         summaryText = findViewById(R.id.summaryText);
         searchEdit = findViewById(R.id.searchEdit);
-        ListView habitList = findViewById(R.id.habitList);
-        habitList.setEmptyView(findViewById(R.id.emptyView));
+        habitList = findViewById(R.id.habitList);
+        emptyView = findViewById(R.id.emptyView);
+        Spinner sortSpinner = findViewById(R.id.sortSpinner);
         Button addButton = findViewById(R.id.addButton);
         Button accountButton = findViewById(R.id.accountButton);
         Button logoutButton = findViewById(R.id.logoutButton);
@@ -64,7 +87,17 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             return;
         }
         welcomeText.setText(username == null ? "我的打卡" : username + " 的打卡");
+
+        habitList.setLayoutManager(new LinearLayoutManager(this));
         habitList.setAdapter(adapter);
+        // Spacing between cards; ListView's dividerHeight has no RecyclerView equivalent.
+        int gap = (int) (12 * getResources().getDisplayMetrics().density);
+        habitList.addItemDecoration(new SpacingDecoration(gap));
+
+        // Drag-to-reorder; only attached while a manual order makes sense (see updateDragEnabled).
+        itemTouchHelper = new ItemTouchHelper(new ReorderCallback());
+
+        setupSortSpinner(sortSpinner);
 
         addButton.setOnClickListener(v -> {
             Intent intent = new Intent(this, EditHabitActivity.class);
@@ -117,6 +150,26 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         });
     }
 
+    private void setupSortSpinner(Spinner sortSpinner) {
+        ArrayAdapter<String> sortAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item,
+                new String[]{"自定义（拖拽）", "待完成优先", "连续最久", "创建最新"});
+        sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sortSpinner.setAdapter(sortAdapter);
+        sortSpinner.setSelection(sortMode);
+        sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                sortMode = position;
+                refresh();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -149,7 +202,10 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private void refresh() {
         String keyword = searchEdit == null ? "" : searchEdit.getText().toString().trim();
         List<Habit> habits = dbHelper.searchHabits(keyword, filterMode, userId);
+        applySort(habits);
         adapter.submitList(habits);
+        emptyView.setVisibility(habits.isEmpty() ? View.VISIBLE : View.GONE);
+        updateDragEnabled(keyword);
 
         List<Habit> allHabits = dbHelper.getAllHabits(userId);
         int totalChecks = 0;
@@ -167,6 +223,56 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
                 allHabits.size(), completedToday, totalChecks, bestStreak));
     }
 
+    /**
+     * Reorder the already-filtered list in place. The DB returns rows in custom (sort_order)
+     * order, so SORT_CUSTOM is a no-op; the others sort by runtime-computed fields.
+     */
+    private void applySort(List<Habit> habits) {
+        switch (sortMode) {
+            case SORT_DUE_FIRST:
+                // Due-today habits first; ties keep the underlying custom order (stable sort).
+                Collections.sort(habits, new Comparator<Habit>() {
+                    @Override
+                    public int compare(Habit a, Habit b) {
+                        return Boolean.compare(b.isDueToday(), a.isDueToday());
+                    }
+                });
+                break;
+            case SORT_STREAK:
+                Collections.sort(habits, new Comparator<Habit>() {
+                    @Override
+                    public int compare(Habit a, Habit b) {
+                        return Integer.compare(b.streakDays, a.streakDays);
+                    }
+                });
+                break;
+            case SORT_CREATED:
+                Collections.sort(habits, new Comparator<Habit>() {
+                    @Override
+                    public int compare(Habit a, Habit b) {
+                        return Long.compare(b.createdAt, a.createdAt);
+                    }
+                });
+                break;
+            case SORT_CUSTOM:
+            default:
+                // Already in sort_order from the DB query.
+                break;
+        }
+    }
+
+    /**
+     * Dragging only makes sense when the list is the full set in manual order: custom sort,
+     * no search keyword, and the "all" filter. Otherwise the visible list is a reordered or
+     * narrowed subset where a dropped position has no well-defined persisted order.
+     */
+    private void updateDragEnabled(String keyword) {
+        boolean canDrag = sortMode == SORT_CUSTOM
+                && filterMode == 0
+                && TextUtils.isEmpty(keyword);
+        itemTouchHelper.attachToRecyclerView(canDrag ? habitList : null);
+    }
+
     private void exportReport() {
         File dir = getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
         if (dir == null) {
@@ -182,6 +288,50 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             Toast.makeText(this, "已导出：" + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
         } catch (IOException e) {
             Toast.makeText(this, "导出失败", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /** Even vertical gap between cards, applied as a bottom offset on every row. */
+    private static class SpacingDecoration extends RecyclerView.ItemDecoration {
+        private final int gap;
+
+        SpacingDecoration(int gap) {
+            this.gap = gap;
+        }
+
+        @Override
+        public void getItemOffsets(@NonNull Rect outRect, @NonNull View view,
+                                   @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+            outRect.bottom = gap;
+        }
+    }
+
+    /** Long-press drag to reorder; persists the new order to the DB when the finger lifts. */
+    private class ReorderCallback extends ItemTouchHelper.SimpleCallback {
+        ReorderCallback() {
+            super(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
+        }
+
+        @Override
+        public boolean onMove(@NonNull RecyclerView recyclerView,
+                              @NonNull RecyclerView.ViewHolder viewHolder,
+                              @NonNull RecyclerView.ViewHolder target) {
+            adapter.onItemMove(viewHolder.getBindingAdapterPosition(),
+                    target.getBindingAdapterPosition());
+            return true;
+        }
+
+        @Override
+        public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+            // Swipe disabled.
+        }
+
+        @Override
+        public void clearView(@NonNull RecyclerView recyclerView,
+                              @NonNull RecyclerView.ViewHolder viewHolder) {
+            super.clearView(recyclerView, viewHolder);
+            // Drag finished; write the new order so it survives navigation and restart.
+            dbHelper.updateHabitOrder(adapter.currentOrderIds());
         }
     }
 }

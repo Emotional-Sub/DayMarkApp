@@ -18,7 +18,7 @@ import java.util.Set;
 
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
-    private static final int DB_VERSION = 4;
+    private static final int DB_VERSION = 5;
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
@@ -49,7 +49,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 "frequency_type INTEGER NOT NULL DEFAULT 0," +
                 "frequency_days TEXT," +
                 "frequency_count INTEGER NOT NULL DEFAULT 0," +
-                "target_days INTEGER NOT NULL DEFAULT 0)");
+                "target_days INTEGER NOT NULL DEFAULT 0," +
+                "sort_order INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE check_records (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "habit_id INTEGER NOT NULL," +
@@ -71,7 +72,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 db.execSQL("DROP TABLE IF EXISTS habits");
                 db.execSQL("DROP TABLE IF EXISTS users");
                 onCreate(db);
-                return; // onCreate already builds the latest (v4) schema with seeded data.
+                return; // onCreate already builds the latest schema with seeded data.
             }
         }
         // v4 added per-habit frequency/goal columns and salted password hashing.
@@ -82,6 +83,12 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             addColumnQuietly(db, "habits", "target_days INTEGER NOT NULL DEFAULT 0");
             addColumnQuietly(db, "users", "salt TEXT");
             migratePlaintextPasswords(db);
+        }
+        // v5 added a manual sort_order column. Seed it from id so existing habits keep a stable,
+        // deterministic order until the user reorders them.
+        if (oldVersion < 5) {
+            addColumnQuietly(db, "habits", "sort_order INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("UPDATE habits SET sort_order = id");
         }
     }
 
@@ -161,7 +168,18 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         values.put("frequency_days", frequencyDays);
         values.put("frequency_count", frequencyCount);
         values.put("target_days", targetDays);
+        // New habits go to the end of the user's manual order.
+        values.put("sort_order", nextSortOrder(db, userId));
         return db.insert("habits", null, values);
+    }
+
+    /** One past the user's current highest sort_order, so a new habit lands at the bottom. */
+    private long nextSortOrder(SQLiteDatabase db, long userId) {
+        try (Cursor cursor = db.rawQuery(
+                "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM habits WHERE user_id=?",
+                new String[]{String.valueOf(userId)})) {
+            return cursor.moveToFirst() ? cursor.getLong(0) : 1;
+        }
     }
 
     private long insertRecord(SQLiteDatabase db, long habitId, String note, long checkedAt) {
@@ -259,8 +277,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
         ArrayList<Habit> habits = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
+        // Base order is the user's manual sort_order; the non-custom sort modes reorder this
+        // list in memory (streak/due-today are runtime-computed and can't be sorted in SQL).
         try (Cursor cursor = db.query("habits", null, finalWhere, finalArgs, null, null,
-                "created_at DESC, id DESC")) {
+                "sort_order ASC, id ASC")) {
             while (cursor.moveToNext()) {
                 habits.add(readHabit(cursor));
             }
@@ -309,6 +329,32 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = getWritableDatabase();
         db.delete("check_records", "habit_id=?", new String[]{String.valueOf(id)});
         return db.delete("habits", "id=?", new String[]{String.valueOf(id)}) > 0;
+    }
+
+    /**
+     * Persist a new manual order for the given habit ids: the first id gets the smallest
+     * sort_order, and so on. Written in one transaction so the list never ends up half-reordered.
+     * Ids are matched on their own row only, so passing a filtered subset is safe (though the
+     * caller only drags when the full unfiltered list is shown).
+     */
+    public void updateHabitOrder(List<Long> orderedIds) {
+        if (orderedIds == null || orderedIds.isEmpty()) {
+            return;
+        }
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            ContentValues values = new ContentValues();
+            for (int i = 0; i < orderedIds.size(); i++) {
+                values.clear();
+                values.put("sort_order", i + 1);
+                db.update("habits", values, "id=?",
+                        new String[]{String.valueOf(orderedIds.get(i))});
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     public boolean markChecked(long id, String note) {
