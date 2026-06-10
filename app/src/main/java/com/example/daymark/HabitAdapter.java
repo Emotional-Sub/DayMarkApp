@@ -3,6 +3,8 @@ package com.example.daymark;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -19,6 +21,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -112,7 +116,7 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
 
         if (!TextUtils.isEmpty(habit.imageUri)) {
             holder.photoView.setVisibility(View.VISIBLE);
-            holder.photoView.setImageURI(Uri.parse(habit.imageUri));
+            loadThumbnail(holder.photoView, habit.imageUri);
             holder.photoView.setOnClickListener(v -> {
                 Intent intent = new Intent(context, ImagePreviewActivity.class);
                 intent.putExtra("image_uri", habit.imageUri);
@@ -121,6 +125,7 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         } else {
             holder.photoView.setVisibility(View.GONE);
             holder.photoView.setImageDrawable(null);
+            holder.photoView.setTag(R.id.photoView, null);
             holder.photoView.setOnClickListener(null);
         }
 
@@ -144,16 +149,73 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         return "今日待完成";
     }
 
+    /**
+     * Decode the habit photo off the main thread, downsampled to roughly the 150dp image slot,
+     * and apply it only if the view is still bound to the same uri. Replaces the previous
+     * {@code setImageURI}, which decoded the full-size original synchronously on the UI thread —
+     * a jank/OOM risk now that the camera stores full-resolution images.
+     */
+    private void loadThumbnail(ImageView imageView, String imageUri) {
+        // Tag the view with the uri it's loading; a recycled view that has moved on to a different
+        // habit will fail this check when the background decode finishes, so we don't show a stale image.
+        imageView.setTag(R.id.photoView, imageUri);
+        imageView.setImageDrawable(null);
+        final Uri uri = Uri.parse(imageUri);
+        // 150dp slot; decode to about that size in px. Density-scaled so it holds up on hi-dpi screens.
+        final int targetPx = (int) (150 * context.getResources().getDisplayMetrics().density);
+        AppExecutors.io().execute(() -> {
+            Bitmap bitmap = decodeSampled(uri, targetPx);
+            AppExecutors.main().execute(() -> {
+                // Only apply if this view is still waiting on this exact uri (not recycled away).
+                if (imageUri.equals(imageView.getTag(R.id.photoView))) {
+                    imageView.setImageBitmap(bitmap);
+                }
+            });
+        });
+    }
+
+    /** Decode {@code uri} downsampled so its smaller dimension is >= {@code targetPx}. Null on failure. */
+    private Bitmap decodeSampled(Uri uri, int targetPx) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream in = context.getContentResolver().openInputStream(uri)) {
+                BitmapFactory.decodeStream(in, null, bounds);
+            }
+            int sample = 1;
+            int half = Math.min(bounds.outWidth, bounds.outHeight) / 2;
+            while (half / sample >= targetPx) {
+                sample *= 2;
+            }
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = sample;
+            try (InputStream in = context.getContentResolver().openInputStream(uri)) {
+                return BitmapFactory.decodeStream(in, null, opts);
+            }
+        } catch (IOException | RuntimeException e) {
+            // Missing file, revoked uri permission (SecurityException), or a decode failure:
+            // just show nothing. SecurityException is a RuntimeException, so it's covered here.
+            return null;
+        }
+    }
+
     private void showCheckDialog(Habit habit) {
         EditText input = buildNoteInput("今天完成了什么？可不填");
         new AlertDialog.Builder(context)
                 .setTitle("打卡：" + habit.title)
                 .setView(input)
                 .setPositiveButton("保存", (dialog, which) -> {
-                    if (dbHelper.markChecked(habit.id, input.getText().toString().trim())) {
-                        Toast.makeText(context, "打卡成功", Toast.LENGTH_SHORT).show();
-                        listener.onChanged();
-                    }
+                    String note = input.getText().toString().trim();
+                    // DB write off the main thread; report back on the UI thread.
+                    AppExecutors.io().execute(() -> {
+                        boolean ok = dbHelper.markChecked(habit.id, note);
+                        AppExecutors.main().execute(() -> {
+                            if (ok) {
+                                Toast.makeText(context, "打卡成功", Toast.LENGTH_SHORT).show();
+                                listener.onChanged();
+                            }
+                        });
+                    });
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -170,10 +232,15 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
                         Toast.makeText(context, "备注不能为空", Toast.LENGTH_SHORT).show();
                         return;
                     }
-                    if (dbHelper.addNote(habit.id, note)) {
-                        Toast.makeText(context, "备注已保存", Toast.LENGTH_SHORT).show();
-                        listener.onChanged();
-                    }
+                    AppExecutors.io().execute(() -> {
+                        boolean ok = dbHelper.addNote(habit.id, note);
+                        AppExecutors.main().execute(() -> {
+                            if (ok) {
+                                Toast.makeText(context, "备注已保存", Toast.LENGTH_SHORT).show();
+                                listener.onChanged();
+                            }
+                        });
+                    });
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -194,12 +261,17 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
                 .setTitle("撤销今日打卡")
                 .setMessage("将删除“" + habit.title + "”今天最近的一条打卡记录，确定吗？")
                 .setPositiveButton("撤销", (dialog, which) -> {
-                    if (dbHelper.undoTodayCheck(habit.id)) {
-                        Toast.makeText(context, "已撤销今日打卡", Toast.LENGTH_SHORT).show();
-                        listener.onChanged();
-                    } else {
-                        Toast.makeText(context, "今天没有可撤销的打卡", Toast.LENGTH_SHORT).show();
-                    }
+                    AppExecutors.io().execute(() -> {
+                        boolean ok = dbHelper.undoTodayCheck(habit.id);
+                        AppExecutors.main().execute(() -> {
+                            if (ok) {
+                                Toast.makeText(context, "已撤销今日打卡", Toast.LENGTH_SHORT).show();
+                                listener.onChanged();
+                            } else {
+                                Toast.makeText(context, "今天没有可撤销的打卡", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    });
                 })
                 .setNegativeButton("取消", null)
                 .show();
@@ -210,9 +282,12 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
                 .setTitle("删除事件")
                 .setMessage("确定删除“" + habit.title + "”吗？")
                 .setPositiveButton("删除", (dialog, which) -> {
+                    // Cancel the alarm on the main thread (cheap, no DB), delete off-thread.
                     ReminderReceiver.cancel(context, habit.id);
-                    dbHelper.deleteHabit(habit.id);
-                    listener.onChanged();
+                    AppExecutors.io().execute(() -> {
+                        dbHelper.deleteHabit(habit.id);
+                        AppExecutors.main().execute(listener::onChanged);
+                    });
                 })
                 .setNegativeButton("取消", null)
                 .show();

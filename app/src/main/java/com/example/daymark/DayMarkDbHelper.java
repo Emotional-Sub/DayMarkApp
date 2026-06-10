@@ -257,8 +257,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         String where = null;
         String[] args = null;
         if (!TextUtils.isEmpty(keyword)) {
-            where = "(title LIKE ? OR content LIKE ? OR category LIKE ?)";
-            String like = "%" + keyword + "%";
+            // Escape LIKE wildcards in the user's input so a literal % or _ matches itself
+            // instead of acting as a wildcard; the ESCAPE clause designates '\' as the escape char.
+            where = "(title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')";
+            String like = "%" + escapeLike(keyword) + "%";
             args = new String[]{like, like, like};
         }
         List<Habit> habits = queryHabits(userId, where, args);
@@ -274,6 +276,16 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             filtered.add(habit);
         }
         return filtered;
+    }
+
+    /**
+     * Escape the SQL LIKE wildcards ('%' and '_') and the escape char itself ('\') in user input,
+     * so the keyword is matched literally. Pairs with the {@code ESCAPE '\'} clause in the query.
+     */
+    private static String escapeLike(String input) {
+        return input.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private List<Habit> queryHabits(long userId, String where, String[] args) {
@@ -944,15 +956,6 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     .append(" 个事件\n");
         }
         return builder.toString().trim();
-    }
-
-    public double getCompletionRateToday(long userId) {
-        int habitCount = getAllHabits(userId).size();
-        if (habitCount == 0) {
-            return 0;
-        }
-        int checked = getCheckedHabitCountForDay(DateUtils.startOfDay(System.currentTimeMillis()), userId);
-        return checked * 100.0 / habitCount;
     }
 
     public String normalizeCategory(String category) {

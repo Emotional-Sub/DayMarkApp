@@ -34,9 +34,11 @@ public class StatsActivity extends Activity {
             }
         }
 
+        // Completion rate reuses the already-loaded habits/completedToday rather than re-querying.
+        double completionRate = habits.isEmpty() ? 0 : completedToday * 100.0 / habits.size();
         overviewText.setText(String.format(Locale.CHINA,
                 "总事件数：%d\n今日已完成：%d\n总打卡记录：%d\n今日完成率：%.1f%%\n最高连续打卡：%d 天",
-                habits.size(), completedToday, totalChecks, dbHelper.getCompletionRateToday(userId), bestStreak));
+                habits.size(), completedToday, totalChecks, completionRate, bestStreak));
         weekText.setText(dbHelper.buildWeekSummary(userId));
 
         renderAchievements(achievementContainer, dbHelper.getAchievements(userId));
