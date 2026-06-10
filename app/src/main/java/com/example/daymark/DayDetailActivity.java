@@ -76,27 +76,41 @@ public class DayDetailActivity extends Activity {
     }
 
     private void loadRecords() {
-        List<CheckRecord> records = dbHelper.getRecordsForDay(userId, dayStart);
-        adapter.submitList(records);
-        summaryText.setText(String.format(Locale.CHINA, "共 %d 条打卡记录", records.size()));
+        AppExecutors.io().execute(() -> {
+            List<CheckRecord> records = dbHelper.getRecordsForDay(userId, dayStart);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                adapter.submitList(records);
+                summaryText.setText(String.format(Locale.CHINA, "共 %d 条打卡记录", records.size()));
+            });
+        });
     }
 
     /** Pick which event to back-fill a check-in for on this day. */
     private void showHabitPicker() {
-        List<Habit> habits = dbHelper.getAllHabits(userId);
-        if (habits.isEmpty()) {
-            Toast.makeText(this, "还没有事件，先去添加打卡事件", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String[] titles = new String[habits.size()];
-        for (int i = 0; i < habits.size(); i++) {
-            titles[i] = habits.get(i).title;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("补打卡")
-                .setItems(titles, (dialog, which) -> showNoteDialog(habits.get(which)))
-                .setNegativeButton("取消", null)
-                .show();
+        AppExecutors.io().execute(() -> {
+            List<Habit> habits = dbHelper.getAllHabits(userId);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (habits.isEmpty()) {
+                    Toast.makeText(this, "还没有事件，先去添加打卡事件", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String[] titles = new String[habits.size()];
+                for (int i = 0; i < habits.size(); i++) {
+                    titles[i] = habits.get(i).title;
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("补打卡")
+                        .setItems(titles, (dialog, which) -> showNoteDialog(habits.get(which)))
+                        .setNegativeButton("取消", null)
+                        .show();
+            });
+        });
     }
 
     private void showNoteDialog(Habit habit) {
@@ -112,17 +126,26 @@ public class DayDetailActivity extends Activity {
                 .setView(input)
                 .setPositiveButton("保存", (dialog, which) -> {
                     String note = input.getText().toString().trim();
-                    int result = dbHelper.addCheckForDay(habit.id, note, dayStart);
-                    if (result == DayMarkDbHelper.BACKFILL_ADDED) {
-                        Toast.makeText(this, "已补打卡", Toast.LENGTH_SHORT).show();
-                        loadRecords();
-                    } else if (result == DayMarkDbHelper.BACKFILL_ALREADY_CHECKED) {
-                        // The day was already credited; we only appended the note, no extra count.
-                        Toast.makeText(this, "当天已有打卡，已追加备注", Toast.LENGTH_SHORT).show();
-                        loadRecords();
-                    } else {
-                        Toast.makeText(this, "补打卡失败", Toast.LENGTH_SHORT).show();
-                    }
+                    // Back-fill touches the DB (getHabit + insert + update); run it off the UI
+                    // thread and report back on the main thread.
+                    AppExecutors.io().execute(() -> {
+                        int result = dbHelper.addCheckForDay(habit.id, note, dayStart);
+                        AppExecutors.main().execute(() -> {
+                            if (isFinishing()) {
+                                return;
+                            }
+                            if (result == DayMarkDbHelper.BACKFILL_ADDED) {
+                                Toast.makeText(this, "已补打卡", Toast.LENGTH_SHORT).show();
+                                loadRecords();
+                            } else if (result == DayMarkDbHelper.BACKFILL_ALREADY_CHECKED) {
+                                // The day was already credited; we only appended the note, no extra count.
+                                Toast.makeText(this, "当天已有打卡，已追加备注", Toast.LENGTH_SHORT).show();
+                                loadRecords();
+                            } else {
+                                Toast.makeText(this, "补打卡失败", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    });
                 })
                 .setNegativeButton("取消", null)
                 .show();

@@ -217,12 +217,24 @@ public class EditHabitActivity extends Activity {
     }
 
     private void loadHabit(long id) {
-        Habit habit = dbHelper.getHabit(id);
-        if (habit == null) {
-            Toast.makeText(this, "事件不存在", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
+        AppExecutors.io().execute(() -> {
+            Habit habit = dbHelper.getHabit(id);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (habit == null) {
+                    Toast.makeText(this, "事件不存在", Toast.LENGTH_SHORT).show();
+                    finish();
+                    return;
+                }
+                bindHabit(habit);
+            });
+        });
+    }
+
+    /** Populate the form fields from a loaded habit (called on the main thread). */
+    private void bindHabit(Habit habit) {
         titleEdit.setText(habit.title);
         contentEdit.setText(habit.content);
         timeEdit.setText(habit.timeText);
@@ -341,8 +353,12 @@ public class EditHabitActivity extends Activity {
 
     private void showImage() {
         if (!TextUtils.isEmpty(imageUri)) {
-            previewImage.setImageURI(Uri.parse(imageUri));
+            // 210dp preview slot; decode downsampled off the main thread (see ImageLoader) rather
+            // than setImageURI, which would decode the full-size original on the UI thread.
+            int targetPx = (int) (210 * getResources().getDisplayMetrics().density);
+            ImageLoader.load(previewImage, imageUri, targetPx);
         } else {
+            previewImage.setTag(R.id.photoView, null);
             previewImage.setImageResource(android.R.color.transparent);
         }
     }
@@ -386,35 +402,50 @@ public class EditHabitActivity extends Activity {
         String category = dbHelper.normalizeCategory((String) categorySpinner.getSelectedItem());
         String reminderTime = dbHelper.normalizeReminder(reminderEdit.getText().toString().trim());
 
-        boolean success;
-        long savedId;
-        if (habitId == -1) {
-            if (userId == DayMarkDbHelper.NO_USER) {
-                Toast.makeText(this, "登录状态已失效，请重新登录", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            savedId = dbHelper.addHabit(userId, title, content, timeText, imageUri, category,
-                    reminderTime, frequencyType, frequencyDays, frequencyCount, targetDays);
-            success = savedId != -1;
-        } else {
-            success = dbHelper.updateHabit(habitId, title, content, timeText, imageUri, category,
-                    reminderTime, frequencyType, frequencyDays, frequencyCount, targetDays);
-            savedId = habitId;
+        if (habitId == -1 && userId == DayMarkDbHelper.NO_USER) {
+            Toast.makeText(this, "登录状态已失效，请重新登录", Toast.LENGTH_SHORT).show();
+            return;
         }
 
-        if (success) {
-            ReminderReceiver.schedule(this, dbHelper.getHabit(savedId));
-            Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
-            // A reminder was set; on aggressive battery managers the alarm can be delayed or killed.
-            // Offer a one-time nudge to whitelist the app, then close regardless of the choice.
-            if (!TextUtils.isEmpty(reminderTime) && shouldOfferBatteryExemption()) {
-                promptBatteryExemption();
+        // Effectively-final copies for the background lambda (the originals above are reassigned).
+        final String fTitle = title, fContent = content, fTimeText = timeText, fCategory = category;
+        final String fReminderTime = reminderTime, fFrequencyDays = frequencyDays;
+        final int fFrequencyType = frequencyType, fFrequencyCount = frequencyCount, fTargetDays = targetDays;
+
+        // DB write (+ re-read for scheduling) off the UI thread; result handled back on main.
+        AppExecutors.io().execute(() -> {
+            long savedId;
+            boolean success;
+            if (habitId == -1) {
+                savedId = dbHelper.addHabit(userId, fTitle, fContent, fTimeText, imageUri, fCategory,
+                        fReminderTime, fFrequencyType, fFrequencyDays, fFrequencyCount, fTargetDays);
+                success = savedId != -1;
             } else {
-                finish();
+                success = dbHelper.updateHabit(habitId, fTitle, fContent, fTimeText, imageUri, fCategory,
+                        fReminderTime, fFrequencyType, fFrequencyDays, fFrequencyCount, fTargetDays);
+                savedId = habitId;
             }
-        } else {
-            Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
-        }
+            // Re-read the saved row (still off the main thread) so the alarm reflects what was stored.
+            Habit saved = success ? dbHelper.getHabit(savedId) : null;
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (success) {
+                    ReminderReceiver.schedule(this, saved);
+                    Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
+                    // A reminder was set; on aggressive battery managers the alarm can be delayed or
+                    // killed. Offer a one-time nudge to whitelist the app, then close regardless.
+                    if (!TextUtils.isEmpty(fReminderTime) && shouldOfferBatteryExemption()) {
+                        promptBatteryExemption();
+                    } else {
+                        finish();
+                    }
+                } else {
+                    Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
 
     /**
