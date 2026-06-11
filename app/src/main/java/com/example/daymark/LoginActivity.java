@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -11,12 +12,22 @@ import android.widget.Toast;
 
 import android.app.Activity;
 
+import androidx.security.crypto.EncryptedSharedPreferences;
+import androidx.security.crypto.MasterKeys;
+
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+
 public class LoginActivity extends Activity {
+    private static final String TAG = "LoginActivity";
+
     private EditText usernameEdit;
     private EditText passwordEdit;
     private CheckBox rememberCheck;
     private DayMarkDbHelper dbHelper;
     private SharedPreferences preferences;
+    // Encrypted store for the remembered password; kept separate from the plain "login" prefs.
+    private SharedPreferences securePreferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,6 +36,7 @@ public class LoginActivity extends Activity {
 
         dbHelper = new DayMarkDbHelper(this);
         preferences = getSharedPreferences("login", MODE_PRIVATE);
+        securePreferences = createSecurePreferences();
 
         usernameEdit = findViewById(R.id.usernameEdit);
         passwordEdit = findViewById(R.id.passwordEdit);
@@ -38,8 +50,8 @@ public class LoginActivity extends Activity {
     }
 
     private void loadRememberedAccount() {
-        // Older versions also persisted the plaintext password here; drop it if present so a
-        // previously-stored password never lingers in SharedPreferences.
+        // Older versions persisted the plaintext password in the plain "login" prefs; drop it so a
+        // previously-stored plaintext password never lingers there.
         if (preferences.contains("password")) {
             preferences.edit().remove("password").apply();
         }
@@ -47,6 +59,9 @@ public class LoginActivity extends Activity {
         rememberCheck.setChecked(remembered);
         if (remembered) {
             usernameEdit.setText(preferences.getString("username", ""));
+            if (securePreferences != null) {
+                passwordEdit.setText(securePreferences.getString("password", ""));
+            }
         } else {
             usernameEdit.setText("demo");
             passwordEdit.setText("123456");
@@ -61,7 +76,7 @@ public class LoginActivity extends Activity {
         }
         long userId = dbHelper.login(username, password);
         if (userId != DayMarkDbHelper.NO_USER) {
-            saveRememberState(username);
+            saveRememberState(username, password);
             Intent intent = new Intent(this, MainActivity.class);
             intent.putExtra("user_id", userId);
             intent.putExtra("username", username);
@@ -97,11 +112,10 @@ public class LoginActivity extends Activity {
         return true;
     }
 
-    private void saveRememberState(String username) {
+    private void saveRememberState(String username, String password) {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean("remember", rememberCheck.isChecked());
         if (rememberCheck.isChecked()) {
-            // Only the username is remembered; the password is never persisted.
             editor.putString("username", username);
         } else {
             editor.remove("username");
@@ -109,5 +123,32 @@ public class LoginActivity extends Activity {
         // Clear any plaintext password left by an older version regardless of the checkbox.
         editor.remove("password");
         editor.apply();
+
+        if (securePreferences != null) {
+            SharedPreferences.Editor secureEditor = securePreferences.edit();
+            if (rememberCheck.isChecked()) {
+                secureEditor.putString("password", password);
+            } else {
+                secureEditor.remove("password");
+            }
+            secureEditor.apply();
+        }
+    }
+
+    private SharedPreferences createSecurePreferences() {
+        try {
+            String masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC);
+            return EncryptedSharedPreferences.create(
+                    "secure_login",
+                    masterKeyAlias,
+                    this,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
+        } catch (GeneralSecurityException | IOException e) {
+            // If the keystore is unavailable we fall back to not remembering the password
+            // rather than crashing the login screen.
+            Log.e(TAG, "Failed to create encrypted preferences", e);
+            return null;
+        }
     }
 }
