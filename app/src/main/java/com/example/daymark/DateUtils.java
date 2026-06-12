@@ -81,4 +81,9 @@ public class DateUtils {
     public static String formatMonthDay(long time) {
         return formatter("MM-dd").format(new Date(time));
     }
+
+    /** Month of the given instant as 1=January ... 12=December. */
+    public static int monthOfYear(long time) {
+        return calendar(time).get(Calendar.MONTH) + 1;
+    }
 }

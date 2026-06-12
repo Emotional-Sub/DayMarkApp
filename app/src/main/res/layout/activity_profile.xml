@@ -164,20 +164,10 @@
             android:textSize="13sp" />
 
         <Button
-            android:id="@+id/changePasswordButton"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_button_outline"
-            android:text="修改密码"
-            android:textColor="@color/brand_green"
-            android:textSize="15sp" />
-
-        <Button
             android:id="@+id/deleteAccountButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_button_outline"
             android:text="删除账号"
             android:textColor="@color/brand_coral"
