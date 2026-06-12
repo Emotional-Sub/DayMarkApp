@@ -279,6 +279,12 @@ public class ProfileActivity extends Activity {
 
     /** Return to login and clear the back stack so the deleted/changed session can't be resumed. */
     private void goToLogin() {
+        // Clear the saved session, otherwise LoginActivity's auto-login would immediately send the
+        // user (with now-stale credentials) right back to the app instead of showing the login screen.
+        getSharedPreferences("login", MODE_PRIVATE).edit()
+                .remove("session_user_id")
+                .remove("session_username")
+                .apply();
         Intent intent = new Intent(this, LoginActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);

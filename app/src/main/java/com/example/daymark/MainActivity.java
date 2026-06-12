@@ -124,6 +124,11 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             startActivity(intent);
         });
         logoutButton.setOnClickListener(v -> {
+            // Clear the saved session so the next launch shows the login screen again.
+            getSharedPreferences("login", MODE_PRIVATE).edit()
+                    .remove("session_user_id")
+                    .remove("session_username")
+                    .apply();
             startActivity(new Intent(this, LoginActivity.class));
             finish();
         });

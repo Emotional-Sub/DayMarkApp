@@ -32,10 +32,19 @@ public class LoginActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_login);
 
         dbHelper = new DayMarkDbHelper(this);
         preferences = getSharedPreferences("login", MODE_PRIVATE);
+
+        // If a previous login left a valid session, skip the login screen entirely and go
+        // straight to the app. Only an explicit logout clears this session.
+        long sessionUserId = preferences.getLong("session_user_id", DayMarkDbHelper.NO_USER);
+        if (sessionUserId != DayMarkDbHelper.NO_USER) {
+            goToMain(sessionUserId, preferences.getString("session_username", null));
+            return;
+        }
+
+        setContentView(R.layout.activity_login);
         securePreferences = createSecurePreferences();
 
         usernameEdit = findViewById(R.id.usernameEdit);
@@ -77,14 +86,23 @@ public class LoginActivity extends Activity {
         long userId = dbHelper.login(username, password);
         if (userId != DayMarkDbHelper.NO_USER) {
             saveRememberState(username, password);
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.putExtra("user_id", userId);
-            intent.putExtra("username", username);
-            startActivity(intent);
-            finish();
+            // Persist the session so the next launch goes straight to the app without logging in.
+            preferences.edit()
+                    .putLong("session_user_id", userId)
+                    .putString("session_username", username)
+                    .apply();
+            goToMain(userId, username);
         } else {
             Toast.makeText(this, "账号或密码不正确", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void goToMain(long userId, String username) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra("user_id", userId);
+        intent.putExtra("username", username);
+        startActivity(intent);
+        finish();
     }
 
     private void doRegister() {
