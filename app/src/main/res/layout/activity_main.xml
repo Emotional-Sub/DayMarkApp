@@ -39,24 +39,30 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/accountButton"
-            android:layout_width="72dp"
-            android:layout_height="42dp"
-            android:background="@drawable/bg_button_outline"
-            android:text="账号"
-            android:textColor="@color/brand_green"
-            android:textSize="14sp" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
-        <Button
-            android:id="@+id/logoutButton"
-            android:layout_width="72dp"
-            android:layout_height="42dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/bg_button_outline"
-            android:text="退出"
-            android:textColor="@color/brand_green"
-            android:textSize="14sp" />
+            <Button
+                android:id="@+id/accountButton"
+                android:layout_width="72dp"
+                android:layout_height="42dp"
+                android:background="@drawable/bg_button_outline"
+                android:text="账号"
+                android:textColor="@color/brand_green"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/logoutButton"
+                android:layout_width="72dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_button_outline"
+                android:text="退出"
+                android:textColor="@color/brand_green"
+                android:textSize="14sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <EditText
