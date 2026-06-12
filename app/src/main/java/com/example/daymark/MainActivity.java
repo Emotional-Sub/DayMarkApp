@@ -48,6 +48,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private HabitAdapter adapter;
     private RecyclerView habitList;
     private View emptyView;
+    private TextView welcomeText;
     private TextView summaryText;
     private EditText searchEdit;
     private Button allButton;
@@ -69,7 +70,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         dbHelper = new DayMarkDbHelper(this);
         adapter = new HabitAdapter(this, dbHelper, this);
 
-        TextView welcomeText = findViewById(R.id.welcomeText);
+        welcomeText = findViewById(R.id.welcomeText);
         summaryText = findViewById(R.id.summaryText);
         searchEdit = findViewById(R.id.searchEdit);
         habitList = findViewById(R.id.habitList);
@@ -258,6 +259,9 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             String summary = String.format(Locale.CHINA,
                     "共 %d 个事件，今日完成 %d 个，累计 %d 次，最高连续 %d 天",
                     allHabits.size(), completedToday, totalChecks, bestStreak);
+            // Show the editable display name (falls back to the login username) in the greeting,
+            // so a nickname changed on the profile page is reflected here after returning.
+            final String displayName = dbHelper.getDisplayName(userId);
             AppExecutors.main().execute(() -> {
                 // A newer refresh started while this one was running (e.g. fast typing); drop ours.
                 if (generation != refreshGeneration || isFinishing()) {
@@ -267,6 +271,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
                 emptyView.setVisibility(habits.isEmpty() ? View.VISIBLE : View.GONE);
                 updateDragEnabled(keyword);
                 summaryText.setText(summary);
+                welcomeText.setText(TextUtils.isEmpty(displayName) ? "我的打卡" : displayName + " 的打卡");
             });
         });
     }

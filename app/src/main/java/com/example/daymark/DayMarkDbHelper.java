@@ -18,7 +18,7 @@ import java.util.Set;
 
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
-    private static final int DB_VERSION = 5;
+    private static final int DB_VERSION = 6;
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
@@ -33,6 +33,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "username TEXT UNIQUE NOT NULL," +
                 "password TEXT NOT NULL," +
+                "display_name TEXT," +
                 "salt TEXT)");
         db.execSQL("CREATE TABLE habits (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -89,6 +90,11 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         if (oldVersion < 5) {
             addColumnQuietly(db, "habits", "sort_order INTEGER NOT NULL DEFAULT 0");
             db.execSQL("UPDATE habits SET sort_order = id");
+        }
+        // v6 split the editable display name from the fixed login username. Existing users get a
+        // null display_name, which callers fall back to the username for until the user sets one.
+        if (oldVersion < 6) {
+            addColumnQuietly(db, "users", "display_name TEXT");
         }
     }
 
@@ -556,6 +562,42 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         values.put("last_check_at", lastCheckAt);
         db.update("habits", values, "id=?", new String[]{String.valueOf(habitId)});
         return true;
+    }
+
+    /**
+     * The user's editable display name, or their login username as a fallback when no display
+     * name has been set (e.g. accounts created before v6, or one that was cleared to empty).
+     */
+    public String getDisplayName(long userId) {
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.query("users", new String[]{"username", "display_name"}, "id=?",
+                new String[]{String.valueOf(userId)}, null, null, null)) {
+            if (!cursor.moveToFirst()) {
+                return "";
+            }
+            String username = cursor.getString(0);
+            String displayName = cursor.isNull(1) ? "" : cursor.getString(1).trim();
+            return TextUtils.isEmpty(displayName) ? username : displayName;
+        }
+    }
+
+    /**
+     * Set the user's display name (the editable nickname shown on screen), leaving the login
+     * username untouched. An empty/blank value is stored as null so {@link #getDisplayName} falls
+     * back to the username again.
+     *
+     * @return true if the row existed and was updated.
+     */
+    public boolean updateDisplayName(long userId, String displayName) {
+        ContentValues values = new ContentValues();
+        String trimmed = displayName == null ? "" : displayName.trim();
+        if (TextUtils.isEmpty(trimmed)) {
+            values.putNull("display_name");
+        } else {
+            values.put("display_name", trimmed);
+        }
+        return getWritableDatabase().update("users", values, "id=?",
+                new String[]{String.valueOf(userId)}) > 0;
     }
 
     /**

@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -18,7 +19,12 @@ import java.util.Map;
 
 /**
  * Per-user profile page: account info + overview, a yearly check-in heatmap, per-category
- * stats, and account settings (change password / delete account, moved here from MainActivity).
+ * stats, personal achievements, and account settings (edit profile / change password /
+ * delete account).
+ *
+ * <p>The header separates the editable display name (nickname) from the fixed login username:
+ * the display name is what's shown prominently and can be changed via "编辑账号", while the
+ * login username stays put as it identifies the account.
  */
 public class ProfileActivity extends Activity {
     /** Trailing weeks shown in the heatmap (~half a year, fits the card width comfortably). */
@@ -26,11 +32,15 @@ public class ProfileActivity extends Activity {
 
     private DayMarkDbHelper dbHelper;
     private long userId = DayMarkDbHelper.NO_USER;
+    /** The fixed login account name; never changes from this screen. */
     private String username;
 
+    private TextView nameText;
+    private TextView accountText;
     private TextView overviewText;
     private TextView categoryStatsText;
     private HeatmapView heatmapView;
+    private LinearLayout achievementContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,15 +56,19 @@ public class ProfileActivity extends Activity {
             return;
         }
 
-        TextView nameText = findViewById(R.id.profileNameText);
+        nameText = findViewById(R.id.profileNameText);
+        accountText = findViewById(R.id.profileAccountText);
         overviewText = findViewById(R.id.profileOverviewText);
         categoryStatsText = findViewById(R.id.categoryStatsText);
         heatmapView = findViewById(R.id.heatmapView);
+        achievementContainer = findViewById(R.id.achievementContainer);
+        Button editProfileButton = findViewById(R.id.editProfileButton);
         Button changePasswordButton = findViewById(R.id.changePasswordButton);
         Button deleteAccountButton = findViewById(R.id.deleteAccountButton);
         Button backButton = findViewById(R.id.backButton);
 
-        nameText.setText(username == null ? "我的主页" : username);
+        accountText.setText("登录账号：" + (username == null ? "" : username));
+        editProfileButton.setOnClickListener(v -> showEditProfileDialog());
         changePasswordButton.setOnClickListener(v -> showChangePasswordDialog());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
         backButton.setOnClickListener(v -> finish());
@@ -67,6 +81,8 @@ public class ProfileActivity extends Activity {
     }
 
     private void refresh() {
+        nameText.setText(dbHelper.getDisplayName(userId));
+
         List<Habit> habits = dbHelper.getAllHabits(userId);
         int totalRecords = dbHelper.getTotalRecordCount(userId);
         int bestStreak = 0;
@@ -88,6 +104,7 @@ public class ProfileActivity extends Activity {
         heatmapView.setData(counts, HEATMAP_WEEKS);
 
         categoryStatsText.setText(buildCategoryText());
+        renderAchievements(dbHelper.getAchievements(userId));
     }
 
     private String buildCategoryText() {
@@ -107,6 +124,74 @@ public class ProfileActivity extends Activity {
                     .append(stat.checkCount).append(" 次打卡");
         }
         return builder.toString();
+    }
+
+    /** Build one row per achievement; unlocked rows use the brand color, locked ones are muted. */
+    private void renderAchievements(List<Achievement> achievements) {
+        achievementContainer.removeAllViews();
+        float density = getResources().getDisplayMetrics().density;
+        int rowPaddingV = (int) (8 * density);
+        int unlockedColor = getColor(R.color.brand_green);
+        int mutedColor = getColor(R.color.muted);
+
+        for (Achievement achievement : achievements) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, rowPaddingV, 0, rowPaddingV);
+            row.setAlpha(achievement.unlocked ? 1f : 0.5f);
+
+            TextView title = new TextView(this);
+            title.setText((achievement.unlocked ? "🏅 " : "🔒 ") + achievement.title);
+            title.setTextColor(achievement.unlocked ? unlockedColor : mutedColor);
+            title.setTextSize(15f);
+            title.setGravity(Gravity.START);
+            title.getPaint().setFakeBoldText(true);
+
+            TextView desc = new TextView(this);
+            desc.setText(achievement.description + (achievement.unlocked ? "（已解锁）" : "（未解锁）"));
+            desc.setTextColor(mutedColor);
+            desc.setTextSize(13f);
+
+            row.addView(title);
+            row.addView(desc);
+            achievementContainer.addView(row);
+        }
+    }
+
+    /** Edit the display name only; the login username is shown read-only for context. */
+    private void showEditProfileDialog() {
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        EditText nameInput = new EditText(this);
+        nameInput.setHint("显示名称");
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        nameInput.setText(dbHelper.getDisplayName(userId));
+        nameInput.setSelection(nameInput.getText().length());
+
+        TextView accountHint = new TextView(this);
+        accountHint.setText("登录账号：" + (username == null ? "" : username) + "（不可修改）");
+        accountHint.setTextColor(getColor(R.color.muted));
+        accountHint.setTextSize(13f);
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(padding, padding / 2, padding, 0);
+        layout.addView(nameInput);
+        layout.addView(accountHint);
+
+        new AlertDialog.Builder(this)
+                .setTitle("编辑账号")
+                .setView(layout)
+                .setPositiveButton("保存", (dialog, which) -> {
+                    String newName = nameInput.getText().toString().trim();
+                    if (dbHelper.updateDisplayName(userId, newName)) {
+                        Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show();
+                        refresh();
+                    } else {
+                        Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private void showChangePasswordDialog() {
