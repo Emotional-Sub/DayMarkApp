@@ -78,7 +78,6 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         Spinner sortSpinner = findViewById(R.id.sortSpinner);
         Button addButton = findViewById(R.id.addButton);
         Button accountButton = findViewById(R.id.accountButton);
-        Button logoutButton = findViewById(R.id.logoutButton);
         Button calendarButton = findViewById(R.id.calendarButton);
         Button statsButton = findViewById(R.id.statsButton);
         Button historyButton = findViewById(R.id.historyButton);
@@ -122,15 +121,6 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             intent.putExtra("user_id", userId);
             intent.putExtra("username", username);
             startActivity(intent);
-        });
-        logoutButton.setOnClickListener(v -> {
-            // Clear the saved session so the next launch shows the login screen again.
-            getSharedPreferences("login", MODE_PRIVATE).edit()
-                    .remove("session_user_id")
-                    .remove("session_username")
-                    .apply();
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
         });
         calendarButton.setOnClickListener(v -> {
             Intent intent = new Intent(this, CalendarActivity.class);

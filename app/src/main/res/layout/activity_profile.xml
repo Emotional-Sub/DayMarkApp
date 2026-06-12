@@ -164,6 +164,16 @@
             android:textSize="13sp" />
 
         <Button
+            android:id="@+id/logoutButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_button_outline"
+            android:text="退出登录"
+            android:textColor="@color/brand_green"
+            android:textSize="15sp" />
+
+        <Button
             android:id="@+id/deleteAccountButton"
             android:layout_width="match_parent"
             android:layout_height="48dp"

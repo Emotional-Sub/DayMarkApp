@@ -63,11 +63,13 @@ public class ProfileActivity extends Activity {
         heatmapView = findViewById(R.id.heatmapView);
         achievementContainer = findViewById(R.id.achievementContainer);
         Button editProfileButton = findViewById(R.id.editProfileButton);
+        Button logoutButton = findViewById(R.id.logoutButton);
         Button deleteAccountButton = findViewById(R.id.deleteAccountButton);
         Button backButton = findViewById(R.id.backButton);
 
         accountText.setText("账号名：" + (username == null ? "" : username));
         editProfileButton.setOnClickListener(v -> showEditProfileDialog());
+        logoutButton.setOnClickListener(v -> goToLogin());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
         backButton.setOnClickListener(v -> finish());
     }
