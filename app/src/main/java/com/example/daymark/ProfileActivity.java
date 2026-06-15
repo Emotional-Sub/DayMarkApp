@@ -8,6 +8,7 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -24,18 +25,20 @@ import java.util.Map;
  * delete account).
  *
  * <p>The header separates the editable display name (nickname) from the fixed login username:
- * the display name is what's shown prominently and can be changed via "编辑账号", while the
+ * the display name is what's shown prominently and can be changed via "编辑资料", while the
  * login username stays put as it identifies the account.
  */
 public class ProfileActivity extends Activity {
     /** Trailing weeks shown in the heatmap (~half a year, fits the card width comfortably). */
     private static final int HEATMAP_WEEKS = 27;
+    private static final int REQUEST_EDIT_PROFILE = 100;
 
     private DayMarkDbHelper dbHelper;
     private long userId = DayMarkDbHelper.NO_USER;
     /** The fixed login account name; never changes from this screen. */
     private String username;
 
+    private ImageView avatarImage;
     private TextView nameText;
     private TextView accountText;
     private TextView totalEventsText;
@@ -45,6 +48,12 @@ public class ProfileActivity extends Activity {
     private TextView categoryStatsText;
     private HeatmapView heatmapView;
     private LinearLayout achievementContainer;
+
+    // 默认头像颜色
+    private static final int[] DEFAULT_AVATAR_COLORS = {
+            0xFF4CAF50, 0xFF2196F3, 0xFFFF9800, 0xFFE91E63,
+            0xFF9C27B0, 0xFF00BCD4, 0xFFFFEB3B, 0xFFFF5722
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,6 +69,7 @@ public class ProfileActivity extends Activity {
             return;
         }
 
+        avatarImage = findViewById(R.id.profileAvatarImage);
         nameText = findViewById(R.id.profileNameText);
         accountText = findViewById(R.id.profileAccountText);
         totalEventsText = findViewById(R.id.totalEventsText);
@@ -75,7 +85,7 @@ public class ProfileActivity extends Activity {
         MaterialButton backButton = findViewById(R.id.backButton);
 
         accountText.setText("账号名：" + (username == null ? "" : username));
-        editProfileButton.setOnClickListener(v -> showEditProfileDialog());
+        editProfileButton.setOnClickListener(v -> goToEditProfile());
         logoutButton.setOnClickListener(v -> goToLogin());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
         backButton.setOnClickListener(v -> finish());
@@ -87,8 +97,28 @@ public class ProfileActivity extends Activity {
         refresh();
     }
 
+    private void goToEditProfile() {
+        Intent intent = new Intent(this, EditProfileActivity.class);
+        intent.putExtra("user_id", userId);
+        intent.putExtra("username", username);
+        startActivityForResult(intent, REQUEST_EDIT_PROFILE);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_EDIT_PROFILE && resultCode == RESULT_OK) {
+            // 刷新数据
+            refresh();
+        }
+    }
+
     private void refresh() {
         nameText.setText(dbHelper.getDisplayName(userId));
+
+        // 加载头像
+        String avatarUri = dbHelper.getAvatarUri(userId);
+        loadAvatar(avatarUri);
 
         List<Habit> habits = dbHelper.getAllHabits(userId);
         int totalRecords = dbHelper.getTotalRecordCount(userId);
@@ -168,99 +198,21 @@ public class ProfileActivity extends Activity {
         }
     }
 
-    /**
-     * Unified account editor: shows the fixed login account name (read-only), an editable
-     * username (the display name), and optional password-change fields. Password fields left
-     * blank mean "don't change the password"; filling them in requires the current password and,
-     * on success, forces a re-login.
-     *
-     * <p>The save uses {@link AlertDialog#setOnShowListener} so a failed password check keeps the
-     * dialog open (the default positive-button click always dismisses).
-     */
-    private void showEditProfileDialog() {
-        int padding = (int) (16 * getResources().getDisplayMetrics().density);
-        int labelTop = (int) (12 * getResources().getDisplayMetrics().density);
-
-        TextView accountName = new TextView(this);
-        accountName.setText("账号名：" + (username == null ? "" : username) + "（不可修改）");
-        accountName.setTextColor(getColor(R.color.muted));
-        accountName.setTextSize(14f);
-
-        EditText nameInput = new EditText(this);
-        nameInput.setHint("用户名");
-        nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        nameInput.setText(dbHelper.getDisplayName(userId));
-        nameInput.setSelection(nameInput.getText().length());
-
-        TextView passwordLabel = new TextView(this);
-        passwordLabel.setText("修改密码（不改请留空）");
-        passwordLabel.setTextColor(getColor(R.color.muted));
-        passwordLabel.setTextSize(13f);
-
-        EditText oldInput = new EditText(this);
-        oldInput.setHint("当前密码");
-        oldInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        EditText newInput = new EditText(this);
-        newInput.setHint("新密码");
-        newInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(padding, padding / 2, padding, 0);
-        layout.addView(accountName);
-        layout.addView(nameInput);
-        passwordLabel.setLayoutParams(topMarginParams(labelTop));
-        layout.addView(passwordLabel);
-        layout.addView(oldInput);
-        layout.addView(newInput);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("编辑账号")
-                .setView(layout)
-                .setPositiveButton("保存", null)
-                .setNegativeButton("取消", null)
-                .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(v -> saveProfile(dialog, nameInput, oldInput, newInput)));
-        dialog.show();
-    }
-
-    /**
-     * Persist the edits from {@link #showEditProfileDialog}. Always saves the username (display
-     * name). If either password field is filled, both are required, the current password is
-     * verified, and a successful change forces a re-login. Validation errors keep the dialog open.
-     */
-    private void saveProfile(AlertDialog dialog, EditText nameInput, EditText oldInput, EditText newInput) {
-        String newName = nameInput.getText().toString().trim();
-        String oldPwd = oldInput.getText().toString();
-        String newPwd = newInput.getText().toString();
-        boolean wantsPasswordChange = !TextUtils.isEmpty(oldPwd) || !TextUtils.isEmpty(newPwd);
-
-        if (wantsPasswordChange && (TextUtils.isEmpty(oldPwd) || TextUtils.isEmpty(newPwd))) {
-            Toast.makeText(this, "修改密码需填写当前密码和新密码", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (!dbHelper.updateDisplayName(userId, newName)) {
-            Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        if (!wantsPasswordChange) {
-            Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-            refresh();
-            return;
-        }
-
-        // Username is already saved; now attempt the password change. A wrong current password
-        // keeps the dialog open so the user can retry without losing the username edit.
-        if (dbHelper.changePassword(userId, oldPwd, newPwd)) {
-            Toast.makeText(this, "密码已修改，请重新登录", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
-            goToLogin();
+    private void loadAvatar(String avatarUri) {
+        if (TextUtils.isEmpty(avatarUri)) {
+            // 没有头像，使用默认图标
+            avatarImage.setImageResource(R.drawable.ic_profile_24);
+            avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
+        } else if (avatarUri.startsWith("default_")) {
+            // 默认头像（纯色）
+            int index = Integer.parseInt(avatarUri.substring(8));
+            if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
+                avatarImage.setImageDrawable(null);
+                avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
+            }
         } else {
-            Toast.makeText(this, "当前密码不正确", Toast.LENGTH_SHORT).show();
+            // 用户上传的头像
+            ImageLoader.load(avatarImage, avatarUri, 200);
         }
     }
 

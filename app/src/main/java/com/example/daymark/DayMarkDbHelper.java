@@ -18,7 +18,7 @@ import java.util.Set;
 
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
-    private static final int DB_VERSION = 6;
+    private static final int DB_VERSION = 7;
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
@@ -95,6 +95,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         // null display_name, which callers fall back to the username for until the user sets one.
         if (oldVersion < 6) {
             addColumnQuietly(db, "users", "display_name TEXT");
+        }
+        // v7 added avatar_uri for user profile pictures.
+        if (oldVersion < 7) {
+            addColumnQuietly(db, "users", "avatar_uri TEXT");
         }
     }
 
@@ -648,6 +652,43 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
         return getWritableDatabase().update("users", values, "id=?",
                 new String[]{String.valueOf(userId)}) > 0;
+    }
+
+    /**
+     * Get the user's avatar URI. Returns null if no avatar is set.
+     */
+    public String getAvatarUri(long userId) {
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.query("users", new String[]{"avatar_uri"}, "id=?",
+                new String[]{String.valueOf(userId)}, null, null, null)) {
+            if (!cursor.moveToFirst() || cursor.isNull(0)) {
+                return null;
+            }
+            return cursor.getString(0);
+        }
+    }
+
+    /**
+     * Set the user's avatar URI. Can be a file URI, content URI, or a special "default_N" string
+     * for default colored avatars.
+     */
+    public void setAvatarUri(long userId, String avatarUri) {
+        ContentValues values = new ContentValues();
+        if (TextUtils.isEmpty(avatarUri)) {
+            values.putNull("avatar_uri");
+        } else {
+            values.put("avatar_uri", avatarUri);
+        }
+        getWritableDatabase().update("users", values, "id=?",
+                new String[]{String.valueOf(userId)});
+    }
+
+    /**
+     * Convenience method for updateDisplayName that returns void.
+     * Used for compatibility with existing code.
+     */
+    public void setDisplayName(long userId, String displayName) {
+        updateDisplayName(userId, displayName);
     }
 
     /**
