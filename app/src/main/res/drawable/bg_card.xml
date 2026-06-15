@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/surface" />
-    <corners android:radius="8dp" />
-    <stroke
-        android:width="1dp"
-        android:color="@color/line" />
-</shape>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Shadow layer -->
+    <item android:top="1dp">
+        <shape>
+            <solid android:color="@color/surfaceContainer"/>
+            <corners android:radius="12dp"/>
+        </shape>
+    </item>
+
+    <!-- Main card -->
+    <item android:bottom="2dp">
+        <shape>
+            <solid android:color="@color/surface"/>
+            <corners android:radius="12dp"/>
+            <stroke android:width="1dp" android:color="@color/outline"/>
+        </shape>
+    </item>
+</layer-list>

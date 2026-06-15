@@ -1,15 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pressed state -->
     <item android:state_pressed="true">
+        <layer-list>
+            <item>
+                <shape>
+                    <gradient
+                        android:angle="135"
+                        android:startColor="@color/primaryContainer"
+                        android:endColor="@color/primary"/>
+                    <corners android:radius="12dp"/>
+                </shape>
+            </item>
+            <!-- Darken overlay -->
+            <item>
+                <shape>
+                    <solid android:color="#20000000"/>
+                    <corners android:radius="12dp"/>
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+    <!-- Disabled state -->
+    <item android:state_enabled="false">
         <shape>
-            <solid android:color="@color/brand_green_dark" />
-            <corners android:radius="8dp" />
+            <solid android:color="@color/surfaceVariant"/>
+            <corners android:radius="12dp"/>
         </shape>
     </item>
+
+    <!-- Normal state -->
     <item>
         <shape>
-            <solid android:color="@color/brand_green" />
-            <corners android:radius="8dp" />
+            <gradient
+                android:angle="135"
+                android:startColor="@color/primary"
+                android:endColor="#266F5C"/>
+            <corners android:radius="12dp"/>
         </shape>
     </item>
 </selector>

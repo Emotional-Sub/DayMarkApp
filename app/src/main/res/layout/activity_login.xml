@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_app"
+    android:background="@color/background"
     android:fillViewport="true">
 
     <LinearLayout
@@ -16,90 +17,101 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="DayMark"
-            android:textColor="@color/ink"
-            android:textSize="34sp"
-            android:textStyle="bold" />
+            android:textAppearance="@style/TextAppearance.DayMark.Headline.Large" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="记录每一天的坚持"
-            android:textColor="@color/muted"
-            android:textSize="16sp" />
+            android:textAppearance="@style/TextAppearance.DayMark.Body.Large"
+            android:textColor="@color/onSurfaceVariant" />
 
-        <LinearLayout
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
-            android:background="@drawable/bg_card"
-            android:orientation="vertical"
-            android:padding="18dp">
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:contentPadding="18dp">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="账号登录"
-                android:textColor="@color/ink"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
 
-            <EditText
-                android:id="@+id/usernameEdit"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="18dp"
-                android:background="@drawable/bg_input"
-                android:hint="用户名"
-                android:inputType="text"
-                android:paddingHorizontal="14dp"
-                android:singleLine="true"
-                android:textColor="@color/ink"
-                android:textColorHint="@color/muted" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="账号登录"
+                    android:textAppearance="@style/TextAppearance.DayMark.Headline.Small" />
 
-            <EditText
-                android:id="@+id/passwordEdit"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_input"
-                android:hint="密码"
-                android:inputType="textPassword"
-                android:paddingHorizontal="14dp"
-                android:singleLine="true"
-                android:textColor="@color/ink"
-                android:textColorHint="@color/muted" />
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:hint="用户名"
+                    app:boxBackgroundMode="outline"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusTopStart="12dp">
 
-            <CheckBox
-                android:id="@+id/rememberCheck"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:buttonTint="@color/brand_green"
-                android:text="记住密码"
-                android:textColor="@color/ink"
-                android:textSize="15sp" />
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/usernameEdit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:singleLine="true" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-            <Button
-                android:id="@+id/loginButton"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_button_primary"
-                android:text="登录"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:hint="密码"
+                    app:boxBackgroundMode="outline"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:endIconMode="password_toggle">
 
-            <Button
-                android:id="@+id/registerButton"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_button_outline"
-                android:text="注册新账号"
-                android:textColor="@color/brand_green"
-                android:textSize="15sp" />
-        </LinearLayout>
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/passwordEdit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textPassword"
+                        android:singleLine="true" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/rememberCheck"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="记住密码"
+                    android:textAppearance="@style/TextAppearance.DayMark.Body.Medium" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/loginButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:layout_marginTop="12dp"
+                    android:text="登录"
+                    android:textAppearance="@style/TextAppearance.DayMark.Button"
+                    app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/registerButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="10dp"
+                    android:text="注册新账号"
+                    android:textAppearance="@style/TextAppearance.DayMark.Label.Large"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 </ScrollView>

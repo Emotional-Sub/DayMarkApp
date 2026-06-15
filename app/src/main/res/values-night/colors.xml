@@ -1,0 +1,52 @@
+<resources>
+    <!-- Material 3 Dark Theme Colors -->
+
+    <!-- Primary -->
+    <color name="primary">#8BD7B8</color>
+    <color name="onPrimary">#003825</color>
+    <color name="primaryContainer">#005139</color>
+    <color name="onPrimaryContainer">#A8F4D7</color>
+
+    <!-- Secondary -->
+    <color name="secondary">#FFB4A0</color>
+    <color name="onSecondary">#690003</color>
+    <color name="secondaryContainer">#930006</color>
+    <color name="onSecondaryContainer">#FFDAD3</color>
+
+    <!-- Tertiary -->
+    <color name="tertiary">#FFCC94</color>
+    <color name="onTertiary">#4A2800</color>
+    <color name="tertiaryContainer">#683C00</color>
+    <color name="onTertiaryContainer">#FFDCBE</color>
+
+    <!-- Error -->
+    <color name="error">#FFB4AB</color>
+    <color name="onError">#690005</color>
+    <color name="errorContainer">#93000A</color>
+    <color name="onErrorContainer">#FFDAD6</color>
+
+    <!-- Surface -->
+    <color name="surface">#121212</color>
+    <color name="onSurface">#E5E5E5</color>
+    <color name="surfaceVariant">#3C4042</color>
+    <color name="onSurfaceVariant">#B0B3B8</color>
+    <color name="surfaceContainer">#1E1E1E</color>
+    <color name="surfaceContainerHigh">#292929</color>
+    <color name="surfaceContainerHighest">#333333</color>
+
+    <!-- Background -->
+    <color name="background">#1A1C19</color>
+    <color name="onBackground">#E5E5E5</color>
+
+    <!-- Outline -->
+    <color name="outline">#3C4042</color>
+    <color name="outlineVariant">#2C2E30</color>
+
+    <!-- Success -->
+    <color name="success">#8BD7B8</color>
+    <color name="onSuccess">#003825</color>
+
+    <!-- Warning -->
+    <color name="warning">#FFCC94</color>
+    <color name="onWarning">#4A2800</color>
+</resources>

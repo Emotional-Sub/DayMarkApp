@@ -5,9 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.Toast;
 
 import android.app.Activity;
@@ -15,14 +13,17 @@ import android.app.Activity;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
 
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.TextInputEditText;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 public class LoginActivity extends Activity {
     private static final String TAG = "LoginActivity";
 
-    private EditText usernameEdit;
-    private EditText passwordEdit;
+    private TextInputEditText usernameEdit;
+    private TextInputEditText passwordEdit;
     private CheckBox rememberCheck;
     private DayMarkDbHelper dbHelper;
     private SharedPreferences preferences;
@@ -50,8 +51,8 @@ public class LoginActivity extends Activity {
         usernameEdit = findViewById(R.id.usernameEdit);
         passwordEdit = findViewById(R.id.passwordEdit);
         rememberCheck = findViewById(R.id.rememberCheck);
-        Button loginButton = findViewById(R.id.loginButton);
-        Button registerButton = findViewById(R.id.registerButton);
+        MaterialButton loginButton = findViewById(R.id.loginButton);
+        MaterialButton registerButton = findViewById(R.id.registerButton);
 
         loadRememberedAccount();
         loginButton.setOnClickListener(v -> doLogin());

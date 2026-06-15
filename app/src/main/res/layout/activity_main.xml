@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_app"
+    android:background="@color/background"
     android:orientation="vertical">
 
     <LinearLayout
@@ -25,9 +26,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="我的打卡"
-                android:textColor="@color/ink"
-                android:textSize="26sp"
-                android:textStyle="bold" />
+                android:textAppearance="@style/TextAppearance.DayMark.Headline.Medium" />
 
             <TextView
                 android:id="@+id/summaryText"
@@ -35,32 +34,37 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
                 android:text="今天也要稳稳完成"
-                android:textColor="@color/muted"
-                android:textSize="14sp" />
+                android:textAppearance="@style/TextAppearance.DayMark.Body.Medium"
+                android:textColor="@color/onSurfaceVariant" />
         </LinearLayout>
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/accountButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="72dp"
             android:layout_height="42dp"
-            android:background="@drawable/bg_button_outline"
             android:text="账号"
-            android:textColor="@color/brand_green"
-            android:textSize="14sp" />
+            app:cornerRadius="12dp" />
     </LinearLayout>
 
-    <EditText
-        android:id="@+id/searchEdit"
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
-        android:layout_height="46dp"
+        android:layout_height="wrap_content"
         android:layout_marginHorizontal="18dp"
-        android:background="@drawable/bg_input"
         android:hint="搜索标题或内容"
-        android:paddingHorizontal="14dp"
-        android:singleLine="true"
-        android:textColor="@color/ink"
-        android:textColorHint="@color/muted"
-        android:textSize="14sp" />
+        app:boxBackgroundMode="outline"
+        app:boxCornerRadiusBottomEnd="12dp"
+        app:boxCornerRadiusBottomStart="12dp"
+        app:boxCornerRadiusTopEnd="12dp"
+        app:boxCornerRadiusTopStart="12dp"
+        app:startIconDrawable="@android:drawable/ic_menu_search">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/searchEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:singleLine="true" />
+    </com.google.android.material.textfield.TextInputLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -69,37 +73,36 @@
         android:layout_marginTop="10dp"
         android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/allButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_primary"
             android:text="全部"
-            android:textColor="@android:color/white"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/todoButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_outline"
             android:text="今日待完成"
-            android:textColor="@color/brand_green"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/doneTodayButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_outline"
             android:text="今日已完成"
-            android:textColor="@color/brand_green"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp" />
     </LinearLayout>
 
     <LinearLayout
@@ -109,48 +112,57 @@
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/calendarButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_outline"
             android:text="日历"
-            android:textColor="@color/brand_green"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_calendar_24"
+            app:iconGravity="textStart"
+            app:iconSize="18dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/statsButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_outline"
             android:text="统计"
-            android:textColor="@color/brand_green"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_stats_24"
+            app:iconGravity="textStart"
+            app:iconSize="18dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/historyButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_outline"
             android:text="历史"
-            android:textColor="@color/brand_green"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_history_24"
+            app:iconGravity="textStart"
+            app:iconSize="18dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/exportButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:background="@drawable/bg_button_outline"
             android:text="导出"
-            android:textColor="@color/brand_green"
-            android:textSize="13sp" />
+            android:textSize="13sp"
+            app:cornerRadius="12dp" />
     </LinearLayout>
 
     <LinearLayout
@@ -165,8 +177,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="排序"
-            android:textColor="@color/muted"
-            android:textSize="13sp" />
+            android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
+            android:textColor="@color/onSurfaceVariant" />
 
         <Spinner
             android:id="@+id/sortSpinner"
@@ -201,23 +213,23 @@
             android:gravity="center"
             android:paddingHorizontal="32dp"
             android:paddingBottom="88dp"
-            android:text="还没有打卡事件\n点下方“新增打卡事件”开始吧"
-            android:textColor="@color/muted"
-            android:textSize="15sp"
+            android:text="还没有打卡事件\n点下方【新增打卡事件】开始吧"
+            android:textAppearance="@style/TextAppearance.DayMark.Body.Large"
+            android:textColor="@color/onSurfaceVariant"
             android:lineSpacingExtra="6dp"
             android:visibility="gone" />
 
     </FrameLayout>
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/addButton"
         android:layout_width="match_parent"
-        android:layout_height="54dp"
+        android:layout_height="56dp"
         android:layout_marginHorizontal="18dp"
         android:layout_marginBottom="18dp"
-        android:background="@drawable/bg_button_primary"
         android:text="新增打卡事件"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:textStyle="bold" />
+        android:textAppearance="@style/TextAppearance.DayMark.Button"
+        app:cornerRadius="12dp"
+        app:icon="@android:drawable/ic_input_add"
+        app:iconGravity="textStart" />
 </LinearLayout>

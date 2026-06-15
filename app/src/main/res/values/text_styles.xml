@@ -1,0 +1,104 @@
+<resources>
+    <!-- Base Styles -->
+    <style name="TextAppearance.DayMark" parent="TextAppearance.Material3.BodyLarge"/>
+
+    <!-- Headline Base -->
+    <style name="TextAppearance.DayMark.Headline" parent="TextAppearance.Material3.HeadlineMedium"/>
+
+    <!-- Headline Styles -->
+    <style name="TextAppearance.DayMark.Headline.Large">
+        <item name="android:textSize">32sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onBackground</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Headline.Medium">
+        <item name="android:textSize">26sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onBackground</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Headline.Small">
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onBackground</item>
+    </style>
+
+    <!-- Body Base -->
+    <style name="TextAppearance.DayMark.Body" parent="TextAppearance.Material3.BodyMedium"/>
+
+    <!-- Body Styles -->
+    <style name="TextAppearance.DayMark.Body.Large">
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/onSurface</item>
+        <item name="android:lineSpacingExtra">4dp</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Body.Medium">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/onSurface</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Body.Small">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/onSurfaceVariant</item>
+    </style>
+
+    <!-- Label Base -->
+    <style name="TextAppearance.DayMark.Label" parent="TextAppearance.Material3.LabelLarge"/>
+
+    <!-- Label Styles -->
+    <style name="TextAppearance.DayMark.Label.Large">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onSurface</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Label.Medium">
+        <item name="android:textSize">12sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onSurface</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Label.Small">
+        <item name="android:textSize">11sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onSurfaceVariant</item>
+    </style>
+
+    <!-- Button Text Style -->
+    <style name="TextAppearance.DayMark.Button">
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onPrimary</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
+
+    <!-- Title Base -->
+    <style name="TextAppearance.DayMark.Title" parent="TextAppearance.Material3.TitleLarge"/>
+
+    <!-- Title Styles -->
+    <style name="TextAppearance.DayMark.Title.Large">
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onSurface</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Title.Medium">
+        <item name="android:textSize">16sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onSurface</item>
+    </style>
+
+    <style name="TextAppearance.DayMark.Title.Small">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/onSurface</item>
+    </style>
+</resources>
