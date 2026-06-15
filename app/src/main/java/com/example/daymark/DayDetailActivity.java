@@ -91,22 +91,23 @@ public class DayDetailActivity extends Activity {
     /** Pick which event to back-fill a check-in for on this day. */
     private void showHabitPicker() {
         AppExecutors.io().execute(() -> {
-            List<Habit> habits = dbHelper.getAllHabits(userId);
+            // Only show habits that haven't been checked on this day yet
+            List<Habit> uncheckedHabits = dbHelper.getUncheckedHabitsForDay(userId, dayStart);
             AppExecutors.main().execute(() -> {
                 if (isFinishing()) {
                     return;
                 }
-                if (habits.isEmpty()) {
-                    Toast.makeText(this, "还没有事件，先去添加打卡事件", Toast.LENGTH_SHORT).show();
+                if (uncheckedHabits.isEmpty()) {
+                    Toast.makeText(this, "当天所有事件都已打卡", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                String[] titles = new String[habits.size()];
-                for (int i = 0; i < habits.size(); i++) {
-                    titles[i] = habits.get(i).title;
+                String[] titles = new String[uncheckedHabits.size()];
+                for (int i = 0; i < uncheckedHabits.size(); i++) {
+                    titles[i] = uncheckedHabits.get(i).title;
                 }
                 new AlertDialog.Builder(this)
                         .setTitle("补打卡")
-                        .setItems(titles, (dialog, which) -> showNoteDialog(habits.get(which)))
+                        .setItems(titles, (dialog, which) -> showNoteDialog(uncheckedHabits.get(which)))
                         .setNegativeButton("取消", null)
                         .show();
             });

@@ -254,6 +254,35 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Get all habits for a user that have NOT been checked on the specified day.
+     * Used for back-fill to show only habits that still need a check-in on that day.
+     *
+     * @param userId the user whose habits to query
+     * @param dayStart start-of-day timestamp for the target day
+     * @return list of habits without a check-in on that day
+     */
+    public List<Habit> getUncheckedHabitsForDay(long userId, long dayStart) {
+        List<Habit> allHabits = getAllHabits(userId);
+        List<Habit> unchecked = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        long dayEnd = dayStart + DateUtils.DAY_MS;
+
+        for (Habit habit : allHabits) {
+            // Check if this habit has any check-in on the target day
+            try (Cursor cursor = db.query("check_records", new String[]{"id"},
+                    "habit_id=? AND checked_at>=? AND checked_at<?",
+                    new String[]{String.valueOf(habit.id), String.valueOf(dayStart), String.valueOf(dayEnd)},
+                    null, null, null, "1")) {
+                if (!cursor.moveToFirst()) {
+                    // No check-in found for this day, so it's unchecked
+                    unchecked.add(habit);
+                }
+            }
+        }
+        return unchecked;
+    }
+
+    /**
      * Every habit (across all users) that has a reminder time set. Used at boot to re-register
      * alarms, which AlarmManager drops on reboot; there is no logged-in user at that point.
      */
