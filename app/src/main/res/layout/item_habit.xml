@@ -106,20 +106,24 @@
                 android:layout_height="42dp"
                 android:layout_weight="1"
                 android:text="打卡"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:paddingHorizontal="4dp"
                 app:cornerRadius="8dp"
                 app:icon="@drawable/ic_check_24"
-                app:iconSize="18dp" />
+                app:iconGravity="textStart"
+                app:iconPadding="2dp"
+                app:iconSize="16dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/undoButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="42dp"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
                 android:text="撤销"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:paddingHorizontal="4dp"
                 android:visibility="gone"
                 app:cornerRadius="8dp"
                 app:strokeColor="@color/secondary" />
@@ -129,39 +133,48 @@
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="42dp"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
                 android:text="备注"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:paddingHorizontal="4dp"
                 app:cornerRadius="8dp"
                 app:icon="@drawable/ic_note_24"
-                app:iconSize="18dp" />
+                app:iconGravity="textStart"
+                app:iconPadding="2dp"
+                app:iconSize="16dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/editButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="42dp"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
                 android:text="编辑"
-                android:textSize="14dp"
+                android:textSize="13sp"
+                android:paddingHorizontal="4dp"
                 app:cornerRadius="8dp"
                 app:icon="@drawable/ic_edit_24"
-                app:iconSize="18dp" />
+                app:iconGravity="textStart"
+                app:iconPadding="2dp"
+                app:iconSize="16dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/deleteButton"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
                 android:layout_height="42dp"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:layout_weight="1"
                 android:text="删除"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:paddingHorizontal="4dp"
                 app:cornerRadius="8dp"
                 app:icon="@drawable/ic_delete_24"
-                app:iconSize="18dp"
+                app:iconGravity="textStart"
+                app:iconPadding="2dp"
+                app:iconSize="16dp"
                 app:strokeColor="@color/secondary" />
         </LinearLayout>
     </LinearLayout>
