@@ -7,11 +7,12 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.material.button.MaterialButton;
 
 import java.util.List;
 import java.util.Locale;
@@ -37,7 +38,10 @@ public class ProfileActivity extends Activity {
 
     private TextView nameText;
     private TextView accountText;
-    private TextView overviewText;
+    private TextView totalEventsText;
+    private TextView todayCompletedText;
+    private TextView totalChecksText;
+    private TextView maxStreakText;
     private TextView categoryStatsText;
     private HeatmapView heatmapView;
     private LinearLayout achievementContainer;
@@ -58,14 +62,17 @@ public class ProfileActivity extends Activity {
 
         nameText = findViewById(R.id.profileNameText);
         accountText = findViewById(R.id.profileAccountText);
-        overviewText = findViewById(R.id.profileOverviewText);
+        totalEventsText = findViewById(R.id.totalEventsText);
+        todayCompletedText = findViewById(R.id.todayCompletedText);
+        totalChecksText = findViewById(R.id.totalChecksText);
+        maxStreakText = findViewById(R.id.maxStreakText);
         categoryStatsText = findViewById(R.id.categoryStatsText);
         heatmapView = findViewById(R.id.heatmapView);
         achievementContainer = findViewById(R.id.achievementContainer);
-        Button editProfileButton = findViewById(R.id.editProfileButton);
-        Button logoutButton = findViewById(R.id.logoutButton);
-        Button deleteAccountButton = findViewById(R.id.deleteAccountButton);
-        Button backButton = findViewById(R.id.backButton);
+        MaterialButton editProfileButton = findViewById(R.id.editProfileButton);
+        MaterialButton logoutButton = findViewById(R.id.logoutButton);
+        MaterialButton deleteAccountButton = findViewById(R.id.deleteAccountButton);
+        MaterialButton backButton = findViewById(R.id.backButton);
 
         accountText.setText("账号名：" + (username == null ? "" : username));
         editProfileButton.setOnClickListener(v -> showEditProfileDialog());
@@ -93,9 +100,12 @@ public class ProfileActivity extends Activity {
                 completedToday++;
             }
         }
-        overviewText.setText(String.format(Locale.CHINA,
-                "事件总数：%d\n今日完成：%d\n累计打卡：%d 次\n最高连续：%d 天",
-                habits.size(), completedToday, totalRecords, bestStreak));
+
+        // 更新统计卡片
+        totalEventsText.setText(String.valueOf(habits.size()));
+        todayCompletedText.setText(String.valueOf(completedToday));
+        totalChecksText.setText(String.valueOf(totalRecords));
+        maxStreakText.setText(String.valueOf(bestStreak));
 
         long to = DateUtils.startOfDay(System.currentTimeMillis()) + DateUtils.DAY_MS;
         long from = DateUtils.startOfWeek(System.currentTimeMillis())
