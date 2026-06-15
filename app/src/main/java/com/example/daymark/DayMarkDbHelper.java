@@ -849,21 +849,49 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         int bestStreak = 0;
         Set<String> categories = new HashSet<>();
         boolean anyGoalReached = false;
+        int habitsWithGoal = 0;
+
         for (Habit habit : habits) {
             bestStreak = Math.max(bestStreak, habit.streakDays);
             categories.add(habit.category);
+            if (habit.hasGoal()) {
+                habitsWithGoal++;
+            }
             if (habit.goalReached()) {
                 anyGoalReached = true;
             }
         }
 
         ArrayList<Achievement> list = new ArrayList<>();
+
+        // 初级成就
         list.add(new Achievement("初次打卡", "完成第一次打卡", totalRecords >= 1));
+        list.add(new Achievement("初创事件", "创建第一个打卡事件", habits.size() >= 1));
+        list.add(new Achievement("连续三天", "连续打卡达到 3 天", bestStreak >= 3));
+
+        // 中级成就
         list.add(new Achievement("坚持一周", "连续打卡达到 7 天", bestStreak >= 7));
+        list.add(new Achievement("多样化", "创建至少 3 个打卡事件", habits.size() >= 3));
+        list.add(new Achievement("多面手", "创建至少 3 个不同分类的事件", categories.size() >= 3));
+        list.add(new Achievement("五十次", "累计打卡满 50 次", totalRecords >= 50));
+
+        // 高级成就
         list.add(new Achievement("坚持一月", "连续打卡达到 30 天", bestStreak >= 30));
         list.add(new Achievement("百次达成", "累计打卡满 100 次", totalRecords >= 100));
-        list.add(new Achievement("多面手", "创建至少 3 个不同分类的事件", categories.size() >= 3));
         list.add(new Achievement("目标达成", "完成一个事件设定的坚持目标", anyGoalReached));
+        list.add(new Achievement("事件达人", "创建至少 5 个打卡事件", habits.size() >= 5));
+
+        // 专家级成就
+        list.add(new Achievement("坚持百日", "连续打卡达到 100 天", bestStreak >= 100));
+        list.add(new Achievement("五百次", "累计打卡满 500 次", totalRecords >= 500));
+        list.add(new Achievement("全能选手", "创建至少 5 个不同分类的事件", categories.size() >= 5));
+        list.add(new Achievement("目标规划师", "为至少 3 个事件设定坚持目标", habitsWithGoal >= 3));
+
+        // 大师级成就
+        list.add(new Achievement("坚持一年", "连续打卡达到 365 天", bestStreak >= 365));
+        list.add(new Achievement("千次里程碑", "累计打卡满 1000 次", totalRecords >= 1000));
+        list.add(new Achievement("事件大师", "创建至少 10 个打卡事件", habits.size() >= 10));
+
         return list;
     }
 

@@ -41,6 +41,9 @@
             android:name=".EditProfileActivity"
             android:exported="false" />
         <activity
+            android:name=".AchievementsActivity"
+            android:exported="false" />
+        <activity
             android:name=".StatsActivity"
             android:exported="false" />
         <activity

@@ -309,9 +309,12 @@
 
         <!-- Achievements card -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/achievementsCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="true"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
             app:contentPadding="16dp">
@@ -321,11 +324,26 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="个人勋章"
-                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="个人勋章"
+                        android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="查看全部 >"
+                        android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
+                        android:textColor="@color/primary" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/achievementContainer"
@@ -333,6 +351,17 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/noAchievementsText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:gravity="center"
+                    android:text="还没有获得勋章\n继续努力打卡吧！"
+                    android:textAppearance="@style/TextAppearance.DayMark.Body.Medium"
+                    android:textColor="@color/onSurfaceVariant"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

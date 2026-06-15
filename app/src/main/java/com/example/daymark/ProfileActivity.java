@@ -14,7 +14,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -79,6 +81,7 @@ public class ProfileActivity extends Activity {
         categoryStatsText = findViewById(R.id.categoryStatsText);
         heatmapView = findViewById(R.id.heatmapView);
         achievementContainer = findViewById(R.id.achievementContainer);
+        MaterialCardView achievementsCard = findViewById(R.id.achievementsCard);
         MaterialButton editProfileButton = findViewById(R.id.editProfileButton);
         MaterialButton logoutButton = findViewById(R.id.logoutButton);
         MaterialButton deleteAccountButton = findViewById(R.id.deleteAccountButton);
@@ -86,6 +89,7 @@ public class ProfileActivity extends Activity {
 
         accountText.setText("账号名：" + (username == null ? "" : username));
         editProfileButton.setOnClickListener(v -> goToEditProfile());
+        achievementsCard.setOnClickListener(v -> goToAchievements());
         logoutButton.setOnClickListener(v -> goToLogin());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
         backButton.setOnClickListener(v -> finish());
@@ -102,6 +106,12 @@ public class ProfileActivity extends Activity {
         intent.putExtra("user_id", userId);
         intent.putExtra("username", username);
         startActivityForResult(intent, REQUEST_EDIT_PROFILE);
+    }
+
+    private void goToAchievements() {
+        Intent intent = new Intent(this, AchievementsActivity.class);
+        intent.putExtra("user_id", userId);
+        startActivity(intent);
     }
 
     @Override
@@ -169,27 +179,43 @@ public class ProfileActivity extends Activity {
     /** Build one row per achievement; unlocked rows use the brand color, locked ones are muted. */
     private void renderAchievements(List<Achievement> achievements) {
         achievementContainer.removeAllViews();
+        TextView noAchievementsText = findViewById(R.id.noAchievementsText);
+
+        // 只显示已解锁的勋章
+        List<Achievement> unlockedAchievements = new ArrayList<>();
+        for (Achievement achievement : achievements) {
+            if (achievement.unlocked) {
+                unlockedAchievements.add(achievement);
+            }
+        }
+
+        if (unlockedAchievements.isEmpty()) {
+            // 没有获得勋章，显示提示
+            noAchievementsText.setVisibility(android.view.View.VISIBLE);
+            return;
+        }
+
+        noAchievementsText.setVisibility(android.view.View.GONE);
+
         float density = getResources().getDisplayMetrics().density;
         int rowPaddingV = (int) (8 * density);
-        int unlockedColor = getColor(R.color.brand_green);
-        int mutedColor = getColor(R.color.muted);
+        int unlockedColor = getColor(R.color.primary);
 
-        for (Achievement achievement : achievements) {
+        for (Achievement achievement : unlockedAchievements) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(0, rowPaddingV, 0, rowPaddingV);
-            row.setAlpha(achievement.unlocked ? 1f : 0.5f);
 
             TextView title = new TextView(this);
-            title.setText((achievement.unlocked ? "🏅 " : "🔒 ") + achievement.title);
-            title.setTextColor(achievement.unlocked ? unlockedColor : mutedColor);
+            title.setText("🏅 " + achievement.title);
+            title.setTextColor(unlockedColor);
             title.setTextSize(15f);
             title.setGravity(Gravity.START);
             title.getPaint().setFakeBoldText(true);
 
             TextView desc = new TextView(this);
-            desc.setText(achievement.description + (achievement.unlocked ? "（已解锁）" : "（未解锁）"));
-            desc.setTextColor(mutedColor);
+            desc.setText(achievement.description);
+            desc.setTextColor(getColor(R.color.onSurfaceVariant));
             desc.setTextSize(13f);
 
             row.addView(title);
