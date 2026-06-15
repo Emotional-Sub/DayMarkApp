@@ -55,6 +55,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private MaterialButton allButton;
     private MaterialButton todoButton;
     private MaterialButton doneTodayButton;
+    private Spinner sortSpinner;
     private ItemTouchHelper itemTouchHelper;
     private int filterMode = 0;
     private int sortMode = SORT_CUSTOM;
@@ -76,7 +77,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         searchEdit = findViewById(R.id.searchEdit);
         habitList = findViewById(R.id.habitList);
         emptyView = findViewById(R.id.emptyView);
-        Spinner sortSpinner = findViewById(R.id.sortSpinner);
+        sortSpinner = findViewById(R.id.sortSpinner);
         MaterialButton addButton = findViewById(R.id.addButton);
         MaterialButton accountButton = findViewById(R.id.accountButton);
         MaterialButton calendarButton = findViewById(R.id.calendarButton);
@@ -159,27 +160,19 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         });
     }
 
-    private void setupSortSpinner(Spinner sortSpinner) {
-        ArrayAdapter<String> sortAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item,
-                new String[]{"自定义（拖拽）", "待完成优先", "连续最久", "创建最新"});
-        sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        sortSpinner.setAdapter(sortAdapter);
-        sortSpinner.setSelection(sortMode);
+    private void setupSortSpinner(Spinner spinner) {
+        updateSortSpinner();
         sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                // Prevent selecting "Custom (drag)" mode when not in "All" filter.
-                // Custom sort only makes sense with the full unfiltered list.
-                if (position == SORT_CUSTOM && filterMode != 0) {
-                    Toast.makeText(MainActivity.this,
-                            "筛选模式下不支持拖拽排序，请先切换到全部",
-                            Toast.LENGTH_SHORT).show();
-                    // Revert to the previous sort mode without triggering refresh.
-                    sortSpinner.setSelection(sortMode, false);
-                    return;
+                // 在筛选模式下，位置需要调整（因为没有"自定义"选项）
+                if (filterMode != 0) {
+                    // 筛选模式下：0=待完成优先, 1=连续最久, 2=创建最新
+                    sortMode = position + 1; // +1 跳过 SORT_CUSTOM
+                } else {
+                    // 全部模式下：0=自定义, 1=待完成优先, 2=连续最久, 3=创建最新
+                    sortMode = position;
                 }
-                sortMode = position;
                 refresh();
             }
 
@@ -187,6 +180,29 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             public void onNothingSelected(AdapterView<?> parent) {
             }
         });
+    }
+
+    private void updateSortSpinner() {
+        ArrayAdapter<String> sortAdapter;
+        if (filterMode == 0) {
+            // 全部模式：显示所有选项包括"自定义（拖拽）"
+            sortAdapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item,
+                    new String[]{"自定义（拖拽）", "待完成优先", "连续最久", "创建最新"});
+            sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            sortSpinner.setAdapter(sortAdapter);
+            sortSpinner.setSelection(sortMode, false);
+        } else {
+            // 筛选模式：不显示"自定义（拖拽）"
+            sortAdapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item,
+                    new String[]{"待完成优先", "连续最久", "创建最新"});
+            sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            sortSpinner.setAdapter(sortAdapter);
+            // sortMode - 1 因为跳过了 SORT_CUSTOM(0)
+            int position = sortMode > 0 ? sortMode - 1 : 0;
+            sortSpinner.setSelection(position, false);
+        }
     }
 
     @Override
@@ -235,25 +251,37 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
 
     private void setFilterMode(int mode) {
         filterMode = mode;
-        allButton.setBackgroundResource(mode == 0 ? R.drawable.bg_button_primary : R.drawable.bg_button_outline);
-        todoButton.setBackgroundResource(mode == 1 ? R.drawable.bg_button_primary : R.drawable.bg_button_outline);
-        doneTodayButton.setBackgroundResource(mode == 2 ? R.drawable.bg_button_primary : R.drawable.bg_button_outline);
-        allButton.setTextColor(getColor(mode == 0 ? android.R.color.white : R.color.brand_green));
-        todoButton.setTextColor(getColor(mode == 1 ? android.R.color.white : R.color.brand_green));
-        doneTodayButton.setTextColor(getColor(mode == 2 ? android.R.color.white : R.color.brand_green));
 
-        // Auto-switch away from custom sort when entering a filtered mode, since drag-to-reorder
-        // only makes sense on the full unfiltered list. Default to "Due First" for filtered views.
+        // 使用 MaterialButton 的样式切换方式
+        updateButtonStyle(allButton, mode == 0);
+        updateButtonStyle(todoButton, mode == 1);
+        updateButtonStyle(doneTodayButton, mode == 2);
+
+        // 切换到筛选模式时，自动切换到"待完成优先"排序
         if (mode != 0 && sortMode == SORT_CUSTOM) {
             sortMode = SORT_DUE_FIRST;
-            Spinner sortSpinner = findViewById(R.id.sortSpinner);
-            if (sortSpinner != null) {
-                sortSpinner.setSelection(sortMode, false);
-            }
             Toast.makeText(this, "已自动切换到待完成优先排序", Toast.LENGTH_SHORT).show();
         }
 
+        // 更新排序下拉框（根据筛选模式显示不同的选项）
+        updateSortSpinner();
+
         refresh();
+    }
+
+    private void updateButtonStyle(MaterialButton button, boolean isSelected) {
+        if (isSelected) {
+            // 选中状态：实心按钮
+            button.setBackgroundColor(getColor(R.color.primary));
+            button.setTextColor(getColor(R.color.onPrimary));
+            button.setStrokeWidth(0);
+        } else {
+            // 未选中状态：轮廓按钮
+            button.setBackgroundColor(getColor(android.R.color.transparent));
+            button.setTextColor(getColor(R.color.primary));
+            button.setStrokeWidth((int) (1 * getResources().getDisplayMetrics().density));
+            button.setStrokeColor(getColorStateList(R.color.primary));
+        }
     }
 
     private void refresh() {
