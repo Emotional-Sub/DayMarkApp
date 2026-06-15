@@ -24,6 +24,21 @@ public class ReminderReceiver extends BroadcastReceiver {
         long habitId = intent.getLongExtra(EXTRA_HABIT_ID, -1);
         String title = intent.getStringExtra(EXTRA_TITLE);
         String message = intent.getStringExtra(EXTRA_MESSAGE);
+
+        // Verify the habit still exists before showing notification. If it was deleted
+        // after the alarm was scheduled but before it fired, silently skip the notification.
+        if (habitId > 0) {
+            DayMarkDbHelper dbHelper = new DayMarkDbHelper(context);
+            Habit habit = dbHelper.getHabit(habitId);
+            if (habit == null) {
+                return; // Habit was deleted; don't notify.
+            }
+            // Refresh title/message from the current habit data in case it was edited.
+            title = habit.title;
+            message = context instanceof android.content.ContextWrapper
+                    ? dbHelper.buildReminderMessage(habit) : message;
+        }
+
         if (TextUtils.isEmpty(title)) {
             title = "DayMark 打卡提醒";
         }

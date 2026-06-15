@@ -154,12 +154,15 @@ public class HeatmapView extends View {
     /**
      * Month labels across the top gutter. A label is drawn above the first column whose top
      * cell (Monday) falls in a new month, as long as it doesn't crowd the previous label.
+     * Spacing is calculated to prevent overlap even with consecutive month boundaries.
      */
     private void drawMonthLabels(Canvas canvas, float gridLeft, float step, float cell) {
         labelPaint.setTextAlign(Paint.Align.LEFT);
         float baseline = getPaddingTop() + labelPaint.getTextSize();
         int lastMonth = -1;
         float lastLabelRight = -Float.MAX_VALUE;
+        float minGap = 4f * getResources().getDisplayMetrics().density;
+
         for (int col = 0; col < weeks; col++) {
             long colDay = firstCellDay + (long) col * 7 * DateUtils.DAY_MS;
             int month = DateUtils.monthOfYear(colDay);
@@ -168,13 +171,13 @@ public class HeatmapView extends View {
             }
             lastMonth = month;
             float x = gridLeft + col * step;
-            // Skip if it would overlap the previous month label.
-            if (x < lastLabelRight) {
+            // Skip if it would overlap the previous month label (with minimum gap).
+            if (x < lastLabelRight + minGap) {
                 continue;
             }
             String text = month + "月";
             canvas.drawText(text, x, baseline, labelPaint);
-            lastLabelRight = x + labelPaint.measureText(text) + cell;
+            lastLabelRight = x + labelPaint.measureText(text);
         }
     }
 

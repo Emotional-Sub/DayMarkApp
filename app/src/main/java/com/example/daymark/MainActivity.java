@@ -168,6 +168,16 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         sortSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                // Prevent selecting "Custom (drag)" mode when not in "All" filter.
+                // Custom sort only makes sense with the full unfiltered list.
+                if (position == SORT_CUSTOM && filterMode != 0) {
+                    Toast.makeText(MainActivity.this,
+                            "筛选模式下不支持拖拽排序，请先切换到全部",
+                            Toast.LENGTH_SHORT).show();
+                    // Revert to the previous sort mode without triggering refresh.
+                    sortSpinner.setSelection(sortMode, false);
+                    return;
+                }
                 sortMode = position;
                 refresh();
             }
@@ -230,6 +240,18 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         allButton.setTextColor(getColor(mode == 0 ? android.R.color.white : R.color.brand_green));
         todoButton.setTextColor(getColor(mode == 1 ? android.R.color.white : R.color.brand_green));
         doneTodayButton.setTextColor(getColor(mode == 2 ? android.R.color.white : R.color.brand_green));
+
+        // Auto-switch away from custom sort when entering a filtered mode, since drag-to-reorder
+        // only makes sense on the full unfiltered list. Default to "Due First" for filtered views.
+        if (mode != 0 && sortMode == SORT_CUSTOM) {
+            sortMode = SORT_DUE_FIRST;
+            Spinner sortSpinner = findViewById(R.id.sortSpinner);
+            if (sortSpinner != null) {
+                sortSpinner.setSelection(sortMode, false);
+            }
+            Toast.makeText(this, "已自动切换到待完成优先排序", Toast.LENGTH_SHORT).show();
+        }
+
         refresh();
     }
 
@@ -310,14 +332,12 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     }
 
     /**
-     * Dragging only makes sense when the list is the full set in manual order: custom sort,
-     * no search keyword, and the "all" filter. Otherwise the visible list is a reordered or
-     * narrowed subset where a dropped position has no well-defined persisted order.
+     * Dragging is enabled when viewing the full unfiltered list ("all" filter, no search keyword).
+     * If the user drags while in a non-custom sort mode, the sort automatically switches to custom
+     * so the manual order is persisted.
      */
     private void updateDragEnabled(String keyword) {
-        boolean canDrag = sortMode == SORT_CUSTOM
-                && filterMode == 0
-                && TextUtils.isEmpty(keyword);
+        boolean canDrag = filterMode == 0 && TextUtils.isEmpty(keyword);
         itemTouchHelper.attachToRecyclerView(canDrag ? habitList : null);
     }
 
@@ -380,6 +400,17 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             super.clearView(recyclerView, viewHolder);
             // Drag finished; write the new order so it survives navigation and restart.
             dbHelper.updateHabitOrder(adapter.currentOrderIds());
+
+            // If the user dragged while in a non-custom sort mode, automatically switch to custom
+            // sort so the manual order is preserved and visible on the next refresh.
+            if (sortMode != SORT_CUSTOM) {
+                sortMode = SORT_CUSTOM;
+                Spinner sortSpinner = findViewById(R.id.sortSpinner);
+                if (sortSpinner != null) {
+                    sortSpinner.setSelection(sortMode, false);
+                }
+                Toast.makeText(MainActivity.this, "已切换到自定义排序", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }

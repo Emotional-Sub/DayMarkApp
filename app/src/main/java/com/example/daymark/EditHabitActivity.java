@@ -273,7 +273,9 @@ public class EditHabitActivity extends Activity {
     }
 
     private void openCamera() {
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+        // Runtime permission check is only needed on API 23+; below that it's granted at install.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
             return;
         }
@@ -303,6 +305,43 @@ public class EditHabitActivity extends Activity {
             return null;
         }
         return new File(imageDir, "photo_" + System.currentTimeMillis() + ".jpg");
+    }
+
+    /**
+     * Copy an image from an external content:// URI (e.g., a gallery picker that doesn't support
+     * persistable permissions) into our private storage so it survives across app restarts.
+     */
+    private void copyToPrivateStorage(Uri sourceUri) {
+        AppExecutors.io().execute(() -> {
+            File dest = newPhotoFile();
+            if (dest == null) {
+                AppExecutors.main().execute(() ->
+                        Toast.makeText(this, "图片目录创建失败", Toast.LENGTH_SHORT).show());
+                return;
+            }
+            try (java.io.InputStream in = getContentResolver().openInputStream(sourceUri);
+                 java.io.OutputStream out = new java.io.FileOutputStream(dest)) {
+                if (in == null) {
+                    throw new java.io.IOException("无法打开源图片");
+                }
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) >= 0) {
+                    out.write(buffer, 0, read);
+                }
+                String finalUri = android.net.Uri.fromFile(dest).toString();
+                AppExecutors.main().execute(() -> {
+                    if (!isFinishing()) {
+                        imageUri = finalUri;
+                        showImage();
+                        Toast.makeText(this, "图片已保存到应用私有目录", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (java.io.IOException e) {
+                AppExecutors.main().execute(() ->
+                        Toast.makeText(this, "图片保存失败：" + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        });
     }
 
     private void openGallery() {
@@ -343,11 +382,13 @@ public class EditHabitActivity extends Activity {
             Uri uri = data.getData();
             try {
                 getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            } catch (SecurityException ignored) {
-                // Some gallery providers do not offer persistable permission; preview still works for this session.
+                imageUri = uri.toString();
+                showImage();
+            } catch (SecurityException e) {
+                // Some gallery providers don't offer persistable permission; the image will work
+                // this session but may be inaccessible after restart. Copy it to our private storage.
+                copyToPrivateStorage(uri);
             }
-            imageUri = uri.toString();
-            showImage();
         }
     }
 

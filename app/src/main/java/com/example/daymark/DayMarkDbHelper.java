@@ -109,6 +109,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /**
      * Convert any user rows still holding a plaintext password (no salt) into a salted hash.
      * Reads everything first, then writes, so the cursor is closed before the updates run.
+     * Wrapped in a transaction to ensure all-or-nothing migration (no partial failures).
      */
     private void migratePlaintextPasswords(SQLiteDatabase db) {
         ArrayList<Long> ids = new ArrayList<>();
@@ -123,12 +124,21 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 }
             }
         }
-        for (int i = 0; i < ids.size(); i++) {
-            String salt = PasswordUtils.newSalt();
-            ContentValues values = new ContentValues();
-            values.put("salt", salt);
-            values.put("password", PasswordUtils.hash(plaintexts.get(i), salt));
-            db.update("users", values, "id=?", new String[]{String.valueOf(ids.get(i))});
+        if (ids.isEmpty()) {
+            return; // No plaintext passwords to migrate.
+        }
+        db.beginTransaction();
+        try {
+            for (int i = 0; i < ids.size(); i++) {
+                String salt = PasswordUtils.newSalt();
+                ContentValues values = new ContentValues();
+                values.put("salt", salt);
+                values.put("password", PasswordUtils.hash(plaintexts.get(i), salt));
+                db.update("users", values, "id=?", new String[]{String.valueOf(ids.get(i))});
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
     }
 
@@ -287,11 +297,22 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /**
      * Escape the SQL LIKE wildcards ('%' and '_') and the escape char itself ('\') in user input,
      * so the keyword is matched literally. Pairs with the {@code ESCAPE '\'} clause in the query.
+     * Optimized to only allocate a StringBuilder when special characters are actually found.
      */
     private static String escapeLike(String input) {
-        return input.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
+        // Fast path: if no special chars, return as-is to avoid allocation.
+        if (input.indexOf('\\') < 0 && input.indexOf('%') < 0 && input.indexOf('_') < 0) {
+            return input;
+        }
+        StringBuilder sb = new StringBuilder(input.length() + 10);
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (c == '\\' || c == '%' || c == '_') {
+                sb.append('\\');
+            }
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
     private List<Habit> queryHabits(long userId, String where, String[] args) {

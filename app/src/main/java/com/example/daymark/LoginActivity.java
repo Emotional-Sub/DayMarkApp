@@ -87,6 +87,7 @@ public class LoginActivity extends Activity {
         if (userId != DayMarkDbHelper.NO_USER) {
             saveRememberState(username, password);
             // Persist the session so the next launch goes straight to the app without logging in.
+            // Store both user_id and username to avoid null username on auto-login.
             preferences.edit()
                     .putLong("session_user_id", userId)
                     .putString("session_username", username)

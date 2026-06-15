@@ -15,6 +15,10 @@ import java.util.TimeZone;
  * would silently re-bucket past records — shifting streaks and the heatmap. Pinning the zone
  * keeps a given instant on the same calendar day forever. The app is China-locale throughout and
  * China observes no DST, so {@code Asia/Shanghai} is a stable UTC+8 with no daylight transitions.
+ *
+ * <p><b>IMPORTANT:</b> This app is designed for users in China (UTC+8). If used in other time zones,
+ * "today" boundaries will be offset from local midnight. To support global users, the time zone
+ * would need to be configurable per user or derived from device settings.
  */
 public class DateUtils {
     public static final long DAY_MS = 24L * 60L * 60L * 1000L;
