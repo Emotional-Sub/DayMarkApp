@@ -4,7 +4,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.util.Log;
 import android.widget.CheckBox;
 import android.widget.Toast;
 
@@ -20,14 +19,12 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 public class LoginActivity extends Activity {
-    private static final String TAG = "LoginActivity";
-
     private TextInputEditText usernameEdit;
     private TextInputEditText passwordEdit;
     private CheckBox rememberCheck;
     private DayMarkDbHelper dbHelper;
     private SharedPreferences preferences;
-    // Encrypted store for the remembered password; kept separate from the plain "login" prefs.
+    // Encrypted store for the remembered password and session data.
     private SharedPreferences securePreferences;
 
     @Override
@@ -36,17 +33,32 @@ public class LoginActivity extends Activity {
 
         dbHelper = new DayMarkDbHelper(this);
         preferences = getSharedPreferences("login", MODE_PRIVATE);
+        securePreferences = createSecurePreferences();
 
         // If a previous login left a valid session, skip the login screen entirely and go
         // straight to the app. Only an explicit logout clears this session.
-        long sessionUserId = preferences.getLong("session_user_id", DayMarkDbHelper.NO_USER);
+        // Session data is now stored in encrypted preferences for security.
+        long sessionUserId = DayMarkDbHelper.NO_USER;
+        String sessionUsername = null;
+
+        if (securePreferences != null) {
+            try {
+                sessionUserId = securePreferences.getLong("session_user_id", DayMarkDbHelper.NO_USER);
+                sessionUsername = securePreferences.getString("session_username", null);
+            } catch (Exception e) {
+                Logger.securityError("Failed to read encrypted session", e);
+            }
+        }
+
         if (sessionUserId != DayMarkDbHelper.NO_USER) {
-            goToMain(sessionUserId, preferences.getString("session_username", null));
+            goToMain(sessionUserId, sessionUsername);
             return;
         }
 
         setContentView(R.layout.activity_login);
-        securePreferences = createSecurePreferences();
+        if (securePreferences == null) {
+            securePreferences = createSecurePreferences();
+        }
 
         usernameEdit = findViewById(R.id.usernameEdit);
         passwordEdit = findViewById(R.id.passwordEdit);
@@ -87,11 +99,23 @@ public class LoginActivity extends Activity {
         long userId = dbHelper.login(username, password);
         if (userId != DayMarkDbHelper.NO_USER) {
             saveRememberState(username, password);
-            // Persist the session so the next launch goes straight to the app without logging in.
-            // Store both user_id and username to avoid null username on auto-login.
+            // Persist the session in encrypted preferences so the next launch goes straight to
+            // the app without logging in. Store both user_id and username.
+            if (securePreferences != null) {
+                try {
+                    securePreferences.edit()
+                            .putLong("session_user_id", userId)
+                            .putString("session_username", username)
+                            .apply();
+                    Logger.d("Session saved securely for user: " + username);
+                } catch (Exception e) {
+                    Logger.securityError("Failed to save encrypted session", e);
+                }
+            }
+            // Clear any legacy session data from unencrypted preferences
             preferences.edit()
-                    .putLong("session_user_id", userId)
-                    .putString("session_username", username)
+                    .remove("session_user_id")
+                    .remove("session_username")
                     .apply();
             goToMain(userId, username);
         } else {
@@ -167,7 +191,7 @@ public class LoginActivity extends Activity {
         } catch (GeneralSecurityException | IOException e) {
             // If the keystore is unavailable we fall back to not remembering the password
             // rather than crashing the login screen.
-            Log.e(TAG, "Failed to create encrypted preferences", e);
+            Logger.securityError("Failed to create encrypted preferences", e);
             return null;
         }
     }

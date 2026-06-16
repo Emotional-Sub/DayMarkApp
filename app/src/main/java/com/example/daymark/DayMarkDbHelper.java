@@ -6,8 +6,17 @@ import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.net.Uri;
 import android.text.TextUtils;
 
+import androidx.annotation.WorkerThread;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,8 +32,18 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
 
+    private final Context context;
+
     public DayMarkDbHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
+        this.context = context.getApplicationContext();
+    }
+
+    @Override
+    public void onConfigure(SQLiteDatabase db) {
+        super.onConfigure(db);
+        // Enable Write-Ahead Logging for better concurrency: reads don't block writes
+        db.enableWriteAheadLogging();
     }
 
     @Override
@@ -62,13 +81,22 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        Logger.i("Database upgrade started: v" + oldVersion + " -> v" + newVersion);
+
         // v3 introduced per-user habits. Add the column without dropping existing data;
         // pre-existing habits are assigned to the first user (the seeded demo account).
         if (oldVersion < 3) {
             try {
                 db.execSQL("ALTER TABLE habits ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1");
+                Logger.dbSuccess("Added user_id column to habits table");
             } catch (SQLException e) {
-                // Column already present or the table predates this schema; rebuild as a fallback.
+                Logger.dbError("Failed to add user_id column", e);
+                // Column already present or the table predates this schema; backup and rebuild.
+                if (!backupDatabaseToJson(db)) {
+                    Logger.e("Database backup failed before DROP. Aborting upgrade.");
+                    throw new RuntimeException("Cannot upgrade: backup failed and data would be lost", e);
+                }
+                Logger.w("Rebuilding database schema (backup saved)");
                 db.execSQL("DROP TABLE IF EXISTS check_records");
                 db.execSQL("DROP TABLE IF EXISTS habits");
                 db.execSQL("DROP TABLE IF EXISTS users");
@@ -90,23 +118,160 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         if (oldVersion < 5) {
             addColumnQuietly(db, "habits", "sort_order INTEGER NOT NULL DEFAULT 0");
             db.execSQL("UPDATE habits SET sort_order = id");
+            Logger.dbSuccess("Added sort_order column");
         }
         // v6 split the editable display name from the fixed login username. Existing users get a
         // null display_name, which callers fall back to the username for until the user sets one.
         if (oldVersion < 6) {
             addColumnQuietly(db, "users", "display_name TEXT");
+            Logger.dbSuccess("Added display_name column");
         }
         // v7 added avatar_uri for user profile pictures.
         if (oldVersion < 7) {
             addColumnQuietly(db, "users", "avatar_uri TEXT");
+            Logger.dbSuccess("Added avatar_uri column");
         }
+
+        Logger.i("Database upgrade completed successfully");
     }
 
     private void addColumnQuietly(SQLiteDatabase db, String table, String columnDef) {
         try {
             db.execSQL("ALTER TABLE " + table + " ADD COLUMN " + columnDef);
-        } catch (SQLException ignored) {
+        } catch (SQLException e) {
             // Column already exists; safe to continue the upgrade.
+            Logger.d("Column already exists: " + table + "." + columnDef);
+        }
+    }
+
+    /**
+     * Backup all database tables to a JSON file before a potentially destructive operation.
+     * The backup is saved to the app's files directory as "db_backup_[timestamp].json".
+     *
+     * @param db the database to backup
+     * @return true if backup succeeded, false otherwise
+     */
+    private boolean backupDatabaseToJson(SQLiteDatabase db) {
+        try {
+            Logger.i("Starting database backup to JSON");
+            JSONObject backup = new JSONObject();
+            backup.put("backup_version", 1);
+            backup.put("db_version", DB_VERSION);
+            backup.put("timestamp", System.currentTimeMillis());
+
+            // Backup users table
+            JSONArray users = new JSONArray();
+            try (Cursor cursor = db.query("users", null, null, null, null, null, null)) {
+                while (cursor.moveToNext()) {
+                    JSONObject user = new JSONObject();
+                    user.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                    user.put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")));
+                    user.put("password", cursor.getString(cursor.getColumnIndexOrThrow("password")));
+                    int saltIdx = cursor.getColumnIndex("salt");
+                    if (saltIdx >= 0 && !cursor.isNull(saltIdx)) {
+                        user.put("salt", cursor.getString(saltIdx));
+                    }
+                    int displayNameIdx = cursor.getColumnIndex("display_name");
+                    if (displayNameIdx >= 0 && !cursor.isNull(displayNameIdx)) {
+                        user.put("display_name", cursor.getString(displayNameIdx));
+                    }
+                    users.put(user);
+                }
+            }
+            backup.put("users", users);
+
+            // Backup habits table
+            JSONArray habits = new JSONArray();
+            try (Cursor cursor = db.query("habits", null, null, null, null, null, null)) {
+                while (cursor.moveToNext()) {
+                    JSONObject habit = new JSONObject();
+                    habit.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                    int userIdIdx = cursor.getColumnIndex("user_id");
+                    if (userIdIdx >= 0) {
+                        habit.put("user_id", cursor.getLong(userIdIdx));
+                    }
+                    habit.put("title", cursor.getString(cursor.getColumnIndexOrThrow("title")));
+                    habit.put("content", cursor.getString(cursor.getColumnIndexOrThrow("content")));
+                    habit.put("time_text", cursor.getString(cursor.getColumnIndexOrThrow("time_text")));
+                    habit.put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")));
+                    habit.put("check_count", cursor.getInt(cursor.getColumnIndexOrThrow("check_count")));
+                    habit.put("last_check_at", cursor.getLong(cursor.getColumnIndexOrThrow("last_check_at")));
+                    habit.put("created_at", cursor.getLong(cursor.getColumnIndexOrThrow("created_at")));
+
+                    // Optional columns
+                    copyColumnIfExists(cursor, habit, "image_uri");
+                    copyColumnIfExists(cursor, habit, "reminder_time");
+                    copyColumnIfExists(cursor, habit, "frequency_type");
+                    copyColumnIfExists(cursor, habit, "frequency_days");
+                    copyColumnIfExists(cursor, habit, "frequency_count");
+                    copyColumnIfExists(cursor, habit, "target_days");
+                    copyColumnIfExists(cursor, habit, "sort_order");
+
+                    habits.put(habit);
+                }
+            }
+            backup.put("habits", habits);
+
+            // Backup check_records table
+            JSONArray records = new JSONArray();
+            try (Cursor cursor = db.query("check_records", null, null, null, null, null, null)) {
+                while (cursor.moveToNext()) {
+                    JSONObject record = new JSONObject();
+                    record.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                    record.put("habit_id", cursor.getLong(cursor.getColumnIndexOrThrow("habit_id")));
+                    record.put("checked_at", cursor.getLong(cursor.getColumnIndexOrThrow("checked_at")));
+                    int noteIdx = cursor.getColumnIndex("note");
+                    if (noteIdx >= 0 && !cursor.isNull(noteIdx)) {
+                        record.put("note", cursor.getString(noteIdx));
+                    }
+                    records.put(record);
+                }
+            }
+            backup.put("check_records", records);
+
+            // Write to file
+            File backupDir = new File(context.getFilesDir(), "db_backups");
+            if (!backupDir.exists() && !backupDir.mkdirs()) {
+                Logger.e("Failed to create backup directory");
+                return false;
+            }
+
+            String filename = "db_backup_" + System.currentTimeMillis() + ".json";
+            File backupFile = new File(backupDir, filename);
+
+            try (FileOutputStream fos = new FileOutputStream(backupFile)) {
+                fos.write(backup.toString(2).getBytes(StandardCharsets.UTF_8));
+            }
+
+            Logger.i("Database backup saved to: " + backupFile.getAbsolutePath());
+            Logger.i("Backup contains: " + users.length() + " users, " +
+                    habits.length() + " habits, " + records.length() + " records");
+            return true;
+
+        } catch (Exception e) {
+            Logger.e("Database backup failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Helper to safely copy a column value from cursor to JSON if the column exists.
+     */
+    private void copyColumnIfExists(Cursor cursor, JSONObject json, String columnName) throws Exception {
+        int idx = cursor.getColumnIndex(columnName);
+        if (idx >= 0 && !cursor.isNull(idx)) {
+            int type = cursor.getType(idx);
+            switch (type) {
+                case Cursor.FIELD_TYPE_INTEGER:
+                    json.put(columnName, cursor.getLong(idx));
+                    break;
+                case Cursor.FIELD_TYPE_STRING:
+                    json.put(columnName, cursor.getString(idx));
+                    break;
+                case Cursor.FIELD_TYPE_FLOAT:
+                    json.put(columnName, cursor.getDouble(idx));
+                    break;
+            }
         }
     }
 
@@ -116,6 +281,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * Wrapped in a transaction to ensure all-or-nothing migration (no partial failures).
      */
     private void migratePlaintextPasswords(SQLiteDatabase db) {
+        Logger.dbStart("Migrating plaintext passwords to PBKDF2");
         ArrayList<Long> ids = new ArrayList<>();
         ArrayList<String> plaintexts = new ArrayList<>();
         try (Cursor cursor = db.query("users", new String[]{"id", "password", "salt"},
@@ -129,6 +295,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             }
         }
         if (ids.isEmpty()) {
+            Logger.d("No plaintext passwords to migrate");
             return; // No plaintext passwords to migrate.
         }
         db.beginTransaction();
@@ -141,6 +308,9 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 db.update("users", values, "id=?", new String[]{String.valueOf(ids.get(i))});
             }
             db.setTransactionSuccessful();
+            Logger.dbSuccess("Migrated " + ids.size() + " passwords to PBKDF2");
+        } catch (Exception e) {
+            Logger.dbError("Password migration failed", e);
         } finally {
             db.endTransaction();
         }
@@ -213,6 +383,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /**
      * @return the matching user's id, or {@link #NO_USER} when the credentials are invalid.
      */
+    @WorkerThread
     public long login(String username, String password) {
         long userId = NO_USER;
         String storedHash = null;
@@ -244,6 +415,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /**
      * @return the new user's id, or {@link #NO_USER} when the username already exists.
      */
+    @WorkerThread
     public long register(String username, String password) {
         String salt = PasswordUtils.newSalt();
         ContentValues values = new ContentValues();
@@ -253,6 +425,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return getWritableDatabase().insert("users", null, values);
     }
 
+    @WorkerThread
     public List<Habit> getAllHabits(long userId) {
         return queryHabits(userId, null, null);
     }
@@ -265,6 +438,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * @param dayStart start-of-day timestamp for the target day
      * @return list of habits without a check-in on that day
      */
+    @WorkerThread
     public List<Habit> getUncheckedHabitsForDay(long userId, long dayStart) {
         List<Habit> allHabits = getAllHabits(userId);
         List<Habit> unchecked = new ArrayList<>();
@@ -290,6 +464,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * Every habit (across all users) that has a reminder time set. Used at boot to re-register
      * alarms, which AlarmManager drops on reboot; there is no logged-in user at that point.
      */
+    @WorkerThread
     public List<Habit> getHabitsWithReminder() {
         ArrayList<Habit> habits = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -302,6 +477,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return habits;
     }
 
+    @WorkerThread
     public List<Habit> searchHabits(String keyword, int filterMode, long userId) {
         String where = null;
         String[] args = null;
@@ -429,6 +605,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    @WorkerThread
     public Habit getHabit(long id) {
         SQLiteDatabase db = getReadableDatabase();
         try (Cursor cursor = db.query("habits", null, "id=?", new String[]{String.valueOf(id)},
@@ -440,6 +617,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    @WorkerThread
     public long addHabit(long userId, String title, String content, String timeText, String imageUri,
                          String category, String reminderTime, int frequencyType, String frequencyDays,
                          int frequencyCount, int targetDays) {
@@ -448,6 +626,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 frequencyType, frequencyDays, frequencyCount, targetDays);
     }
 
+    @WorkerThread
     public boolean updateHabit(long id, String title, String content, String timeText, String imageUri,
                                String category, String reminderTime, int frequencyType,
                                String frequencyDays, int frequencyCount, int targetDays) {
@@ -466,10 +645,43 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 new String[]{String.valueOf(id)}) > 0;
     }
 
+    @WorkerThread
     public boolean deleteHabit(long id) {
+        // Get the habit before deleting to access its image URI
+        Habit habit = getHabit(id);
+        String imageUri = (habit != null) ? habit.imageUri : null;
+
         SQLiteDatabase db = getWritableDatabase();
         db.delete("check_records", "habit_id=?", new String[]{String.valueOf(id)});
-        return db.delete("habits", "id=?", new String[]{String.valueOf(id)}) > 0;
+        boolean deleted = db.delete("habits", "id=?", new String[]{String.valueOf(id)}) > 0;
+
+        // Clean up the image file after successful deletion
+        if (deleted && imageUri != null && !imageUri.isEmpty()) {
+            deleteImageFile(context, imageUri);
+        }
+
+        return deleted;
+    }
+
+    /**
+     * Delete a habit's image file from disk. Called when a habit is deleted or its image is replaced.
+     *
+     * @param context application context
+     * @param imageUri the URI string of the image to delete
+     */
+    private void deleteImageFile(Context context, String imageUri) {
+        try {
+            Uri uri = Uri.parse(imageUri);
+            String path = uri.getPath();
+            if (path != null) {
+                File file = new File(path);
+                if (file.exists() && file.delete()) {
+                    Logger.d("Deleted habit image: " + file.getName());
+                }
+            }
+        } catch (Exception e) {
+            Logger.w("Failed to delete habit image: " + imageUri, e);
+        }
     }
 
     /**
@@ -478,6 +690,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * Ids are matched on their own row only, so passing a filtered subset is safe (though the
      * caller only drags when the full unfiltered list is shown).
      */
+    @WorkerThread
     public void updateHabitOrder(List<Long> orderedIds) {
         if (orderedIds == null || orderedIds.isEmpty()) {
             return;
@@ -498,6 +711,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    @WorkerThread
     public boolean markChecked(long id, String note) {
         Habit habit = getHabit(id);
         if (habit == null) {
@@ -513,6 +727,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return db.update("habits", values, "id=?", new String[]{String.valueOf(id)}) > 0;
     }
 
+    @WorkerThread
     public boolean addNote(long habitId, String note) {
         if (getHabit(habitId) == null) {
             return false;
@@ -541,6 +756,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * @param dayStart start-of-day timestamp of the day to credit
      * @return one of {@link #BACKFILL_FAILED}, {@link #BACKFILL_ADDED}, {@link #BACKFILL_ALREADY_CHECKED}
      */
+    @WorkerThread
     public int addCheckForDay(long habitId, String note, long dayStart) {
         Habit habit = getHabit(habitId);
         if (habit == null) {
@@ -579,6 +795,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      *
      * @return true if a record from today was removed.
      */
+    @WorkerThread
     public boolean undoTodayCheck(long habitId) {
         Habit habit = getHabit(habitId);
         if (habit == null) {
@@ -622,6 +839,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * The user's editable display name, or their login username as a fallback when no display
      * name has been set (e.g. accounts created before v6, or one that was cleared to empty).
      */
+    @WorkerThread
     public String getDisplayName(long userId) {
         SQLiteDatabase db = getReadableDatabase();
         try (Cursor cursor = db.query("users", new String[]{"username", "display_name"}, "id=?",
@@ -642,6 +860,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      *
      * @return true if the row existed and was updated.
      */
+    @WorkerThread
     public boolean updateDisplayName(long userId, String displayName) {
         ContentValues values = new ContentValues();
         String trimmed = displayName == null ? "" : displayName.trim();
@@ -657,6 +876,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /**
      * Get the user's avatar URI. Returns null if no avatar is set.
      */
+    @WorkerThread
     public String getAvatarUri(long userId) {
         SQLiteDatabase db = getReadableDatabase();
         try (Cursor cursor = db.query("users", new String[]{"avatar_uri"}, "id=?",
@@ -672,6 +892,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * Set the user's avatar URI. Can be a file URI, content URI, or a special "default_N" string
      * for default colored avatars.
      */
+    @WorkerThread
     public void setAvatarUri(long userId, String avatarUri) {
         ContentValues values = new ContentValues();
         if (TextUtils.isEmpty(avatarUri)) {
@@ -687,6 +908,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * Convenience method for updateDisplayName that returns void.
      * Used for compatibility with existing code.
      */
+    @WorkerThread
     public void setDisplayName(long userId, String displayName) {
         updateDisplayName(userId, displayName);
     }
@@ -694,6 +916,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     /**
      * @return true if the current password matched and was updated.
      */
+    @WorkerThread
     public boolean changePassword(long userId, String oldPassword, String newPassword) {
         SQLiteDatabase db = getWritableDatabase();
         String storedHash;
@@ -721,6 +944,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      *
      * @return true if the user existed and was removed.
      */
+    @WorkerThread
     public boolean deleteUser(long userId) {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
@@ -737,6 +961,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    @WorkerThread
     public List<CheckRecord> getAllRecords(long userId) {
         ArrayList<CheckRecord> records = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -759,6 +984,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     /** All check-in records for one day [dayStart, dayStart+1day), newest first. */
+    @WorkerThread
     public List<CheckRecord> getRecordsForDay(long userId, long dayStart) {
         ArrayList<CheckRecord> records = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -782,6 +1008,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         return records;
     }
 
+    @WorkerThread
     public int getTotalRecordCount(long userId) {
         SQLiteDatabase db = getReadableDatabase();
         String sql = "SELECT COUNT(*) FROM check_records r JOIN habits h ON r.habit_id=h.id " +
@@ -791,6 +1018,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    @WorkerThread
     public int getCheckedHabitCountForDay(long dayStart, long userId) {
         SQLiteDatabase db = getReadableDatabase();
         long dayEnd = dayStart + DateUtils.DAY_MS;
@@ -808,6 +1036,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * keyed by start-of-day timestamp. Days with no check-ins are simply absent from the map.
      * One query backs the whole heatmap rather than one query per day.
      */
+    @WorkerThread
     public Map<Long, Integer> getDailyCheckCounts(long userId, long fromInclusive, long toExclusive) {
         Map<Long, Integer> counts = new HashMap<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -825,6 +1054,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     /** Per-category summary (habit count + total check-ins) for the profile page. */
+    @WorkerThread
     public List<CategoryStat> getCategoryStats(long userId) {
         ArrayList<CategoryStat> stats = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -843,6 +1073,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      * Milestone list derived from the user's current aggregate data. Recomputed on each call,
      * so it always reflects reality without a separate achievements table.
      */
+    @WorkerThread
     public List<Achievement> getAchievements(long userId) {
         List<Habit> habits = getAllHabits(userId);
         int totalRecords = getTotalRecordCount(userId);
@@ -922,6 +1153,138 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             builder.append('\n');
         }
         return builder.toString();
+    }
+
+    /**
+     * Restore database from a JSON backup file created by {@link #backupDatabaseToJson}.
+     * This will REPLACE all existing data with the backup content.
+     *
+     * @param jsonFilePath absolute path to the backup JSON file
+     * @return true if restore succeeded, false otherwise
+     */
+    @WorkerThread
+    public boolean restoreFromJson(String jsonFilePath) {
+        try {
+            Logger.i("Starting database restore from: " + jsonFilePath);
+
+            // Read and parse JSON file
+            File backupFile = new File(jsonFilePath);
+            if (!backupFile.exists()) {
+                Logger.e("Backup file not found: " + jsonFilePath);
+                return false;
+            }
+
+            StringBuilder jsonBuilder = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.FileReader(backupFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    jsonBuilder.append(line);
+                }
+            }
+
+            JSONObject backup = new JSONObject(jsonBuilder.toString());
+            int backupVersion = backup.optInt("backup_version", 0);
+            if (backupVersion != 1) {
+                Logger.e("Unsupported backup version: " + backupVersion);
+                return false;
+            }
+
+            JSONArray users = backup.getJSONArray("users");
+            JSONArray habits = backup.getJSONArray("habits");
+            JSONArray records = backup.getJSONArray("check_records");
+
+            SQLiteDatabase db = getWritableDatabase();
+            db.beginTransaction();
+            try {
+                // Clear existing data
+                db.delete("check_records", null, null);
+                db.delete("habits", null, null);
+                db.delete("users", null, null);
+
+                // Restore users
+                for (int i = 0; i < users.length(); i++) {
+                    JSONObject user = users.getJSONObject(i);
+                    ContentValues values = new ContentValues();
+                    values.put("id", user.getLong("id"));
+                    values.put("username", user.getString("username"));
+                    values.put("password", user.getString("password"));
+                    if (user.has("salt") && !user.isNull("salt")) {
+                        values.put("salt", user.getString("salt"));
+                    }
+                    if (user.has("display_name") && !user.isNull("display_name")) {
+                        values.put("display_name", user.getString("display_name"));
+                    }
+                    if (user.has("avatar_uri") && !user.isNull("avatar_uri")) {
+                        values.put("avatar_uri", user.getString("avatar_uri"));
+                    }
+                    db.insert("users", null, values);
+                }
+
+                // Restore habits
+                for (int i = 0; i < habits.length(); i++) {
+                    JSONObject habit = habits.getJSONObject(i);
+                    ContentValues values = new ContentValues();
+                    values.put("id", habit.getLong("id"));
+                    values.put("user_id", habit.getLong("user_id"));
+                    values.put("title", habit.getString("title"));
+                    values.put("content", habit.getString("content"));
+                    values.put("time_text", habit.getString("time_text"));
+                    if (habit.has("image_uri") && !habit.isNull("image_uri")) {
+                        values.put("image_uri", habit.getString("image_uri"));
+                    }
+                    values.put("category", habit.getString("category"));
+                    if (habit.has("reminder_time") && !habit.isNull("reminder_time")) {
+                        values.put("reminder_time", habit.getString("reminder_time"));
+                    }
+                    values.put("check_count", habit.getInt("check_count"));
+                    values.put("last_check_at", habit.getLong("last_check_at"));
+                    values.put("created_at", habit.getLong("created_at"));
+                    if (habit.has("frequency_type")) {
+                        values.put("frequency_type", habit.getInt("frequency_type"));
+                    }
+                    if (habit.has("frequency_days") && !habit.isNull("frequency_days")) {
+                        values.put("frequency_days", habit.getString("frequency_days"));
+                    }
+                    if (habit.has("frequency_count")) {
+                        values.put("frequency_count", habit.getInt("frequency_count"));
+                    }
+                    if (habit.has("target_days")) {
+                        values.put("target_days", habit.getInt("target_days"));
+                    }
+                    if (habit.has("sort_order")) {
+                        values.put("sort_order", habit.getInt("sort_order"));
+                    }
+                    db.insert("habits", null, values);
+                }
+
+                // Restore check records
+                for (int i = 0; i < records.length(); i++) {
+                    JSONObject record = records.getJSONObject(i);
+                    ContentValues values = new ContentValues();
+                    values.put("id", record.getLong("id"));
+                    values.put("habit_id", record.getLong("habit_id"));
+                    if (record.has("note") && !record.isNull("note")) {
+                        values.put("note", record.getString("note"));
+                    }
+                    values.put("checked_at", record.getLong("checked_at"));
+                    db.insert("check_records", null, values);
+                }
+
+                db.setTransactionSuccessful();
+                Logger.i("Database restore completed successfully");
+                Logger.i("Restored: " + users.length() + " users, " +
+                        habits.length() + " habits, " + records.length() + " records");
+                return true;
+
+            } finally {
+                db.endTransaction();
+            }
+
+        } catch (Exception e) {
+            Logger.e("Database restore failed", e);
+            return false;
+        }
     }
 
     /**

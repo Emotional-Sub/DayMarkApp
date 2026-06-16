@@ -329,15 +329,19 @@ public class EditHabitActivity extends Activity {
                 while ((read = in.read(buffer)) >= 0) {
                     out.write(buffer, 0, read);
                 }
-                String finalUri = android.net.Uri.fromFile(dest).toString();
+                // Use FileProvider URI instead of file:// URI
+                Uri destUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", dest);
+                String finalUri = destUri.toString();
                 AppExecutors.main().execute(() -> {
                     if (!isFinishing()) {
                         imageUri = finalUri;
                         showImage();
                         Toast.makeText(this, "图片已保存到应用私有目录", Toast.LENGTH_SHORT).show();
+                        Logger.d("Image copied to private storage: " + dest.getName());
                     }
                 });
             } catch (java.io.IOException e) {
+                Logger.imageError(sourceUri.toString(), e);
                 AppExecutors.main().execute(() ->
                         Toast.makeText(this, "图片保存失败：" + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
@@ -374,8 +378,16 @@ public class EditHabitActivity extends Activity {
             // With EXTRA_OUTPUT the camera writes the full-size image into pendingCameraFile and
             // returns a null data Intent, so don't gate this branch on data being non-null.
             if (pendingCameraFile != null && pendingCameraFile.exists() && pendingCameraFile.length() > 0) {
-                imageUri = Uri.fromFile(pendingCameraFile).toString();
-                showImage();
+                // Use FileProvider URI for consistency with gallery selection
+                try {
+                    Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pendingCameraFile);
+                    imageUri = uri.toString();
+                    showImage();
+                    Logger.d("Camera image saved: " + pendingCameraFile.getName());
+                } catch (IllegalArgumentException e) {
+                    Logger.e("Failed to create FileProvider URI for camera image", e);
+                    Toast.makeText(this, "图片保存失败", Toast.LENGTH_SHORT).show();
+                }
             }
             pendingCameraFile = null;
         } else if (requestCode == REQUEST_GALLERY && data != null && data.getData() != null) {
@@ -384,9 +396,11 @@ public class EditHabitActivity extends Activity {
                 getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 imageUri = uri.toString();
                 showImage();
+                Logger.d("Gallery image selected: " + uri);
             } catch (SecurityException e) {
                 // Some gallery providers don't offer persistable permission; the image will work
                 // this session but may be inaccessible after restart. Copy it to our private storage.
+                Logger.w("Gallery image doesn't support persistable permission, copying to private storage");
                 copyToPrivateStorage(uri);
             }
         }
@@ -452,19 +466,34 @@ public class EditHabitActivity extends Activity {
         final String fTitle = title, fContent = content, fTimeText = timeText, fCategory = category;
         final String fReminderTime = reminderTime, fFrequencyDays = frequencyDays;
         final int fFrequencyType = frequencyType, fFrequencyCount = frequencyCount, fTargetDays = targetDays;
+        final String fNewImageUri = imageUri;
 
         // DB write (+ re-read for scheduling) off the UI thread; result handled back on main.
         AppExecutors.io().execute(() -> {
             long savedId;
             boolean success;
+            String oldImageUri = null;
+
             if (habitId == -1) {
-                savedId = dbHelper.addHabit(userId, fTitle, fContent, fTimeText, imageUri, fCategory,
+                savedId = dbHelper.addHabit(userId, fTitle, fContent, fTimeText, fNewImageUri, fCategory,
                         fReminderTime, fFrequencyType, fFrequencyDays, fFrequencyCount, fTargetDays);
                 success = savedId != -1;
             } else {
-                success = dbHelper.updateHabit(habitId, fTitle, fContent, fTimeText, imageUri, fCategory,
+                // Get old image URI before updating
+                Habit oldHabit = dbHelper.getHabit(habitId);
+                if (oldHabit != null) {
+                    oldImageUri = oldHabit.imageUri;
+                }
+
+                success = dbHelper.updateHabit(habitId, fTitle, fContent, fTimeText, fNewImageUri, fCategory,
                         fReminderTime, fFrequencyType, fFrequencyDays, fFrequencyCount, fTargetDays);
                 savedId = habitId;
+
+                // Clean up the old image after successful update if it changed
+                if (success && oldImageUri != null && !oldImageUri.isEmpty()
+                        && !oldImageUri.equals(fNewImageUri)) {
+                    deleteImageFile(oldImageUri);
+                }
             }
             // Re-read the saved row (still off the main thread) so the alarm reflects what was stored.
             Habit saved = success ? dbHelper.getHabit(savedId) : null;
@@ -487,6 +516,30 @@ public class EditHabitActivity extends Activity {
                 }
             });
         });
+    }
+
+    /**
+     * Delete an old habit image file. Called when updating a habit with a new image,
+     * or when deleting a habit entirely.
+     *
+     * @param imageUri the URI string of the image to delete
+     */
+    private void deleteImageFile(String imageUri) {
+        if (imageUri == null || imageUri.isEmpty()) {
+            return;
+        }
+        try {
+            Uri uri = Uri.parse(imageUri);
+            String path = uri.getPath();
+            if (path != null) {
+                File file = new File(path);
+                if (file.exists() && file.delete()) {
+                    Logger.d("Deleted old image: " + file.getName());
+                }
+            }
+        } catch (Exception e) {
+            Logger.w("Failed to delete old image: " + imageUri, e);
+        }
     }
 
     /**

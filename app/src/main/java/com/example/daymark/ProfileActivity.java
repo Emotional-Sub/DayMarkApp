@@ -269,12 +269,33 @@ public class ProfileActivity extends Activity {
 
     /** Return to login and clear the back stack so the deleted/changed session can't be resumed. */
     private void goToLogin() {
-        // Clear the saved session, otherwise LoginActivity's auto-login would immediately send the
-        // user (with now-stale credentials) right back to the app instead of showing the login screen.
+        // Clear the saved session from encrypted preferences, otherwise LoginActivity's auto-login
+        // would immediately send the user (with now-stale credentials) right back to the app
+        // instead of showing the login screen.
+        try {
+            String masterKeyAlias = androidx.security.crypto.MasterKeys.getOrCreate(
+                    androidx.security.crypto.MasterKeys.AES256_GCM_SPEC);
+            android.content.SharedPreferences securePrefs = androidx.security.crypto.EncryptedSharedPreferences.create(
+                    "secure_login",
+                    masterKeyAlias,
+                    this,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
+            securePrefs.edit()
+                    .remove("session_user_id")
+                    .remove("session_username")
+                    .apply();
+            Logger.d("Encrypted session cleared");
+        } catch (Exception e) {
+            Logger.securityError("Failed to clear encrypted session", e);
+        }
+
+        // Also clear any legacy unencrypted session data
         getSharedPreferences("login", MODE_PRIVATE).edit()
                 .remove("session_user_id")
                 .remove("session_username")
                 .apply();
+
         Intent intent = new Intent(this, LoginActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
