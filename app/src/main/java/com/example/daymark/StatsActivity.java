@@ -3,6 +3,7 @@ package com.example.daymark;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -20,6 +21,9 @@ public class StatsActivity extends Activity {
         long userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
         TextView overviewText = findViewById(R.id.overviewText);
         TextView weekText = findViewById(R.id.weekText);
+        PieChartView pieChartView = findViewById(R.id.pieChartView);
+        LinearLayout legendContainer = findViewById(R.id.legendContainer);
+        TextView noCategoryText = findViewById(R.id.noCategoryText);
         LinearLayout achievementContainer = findViewById(R.id.achievementContainer);
         Button backButton = findViewById(R.id.backButton);
 
@@ -41,8 +45,89 @@ public class StatsActivity extends Activity {
                 habits.size(), completedToday, totalChecks, completionRate, bestStreak));
         weekText.setText(dbHelper.buildWeekSummary(userId));
 
+        // 加载分类统计饼状图
+        loadCategoryPieChart(dbHelper, userId, pieChartView, legendContainer, noCategoryText);
+
         renderAchievements(achievementContainer, dbHelper.getAchievements(userId));
         backButton.setOnClickListener(v -> finish());
+    }
+
+    /**
+     * 加载并显示分类打卡占比饼状图
+     */
+    private void loadCategoryPieChart(DayMarkDbHelper dbHelper, long userId,
+                                     PieChartView pieChartView,
+                                     LinearLayout legendContainer,
+                                     TextView noCategoryText) {
+        AppExecutors.io().execute(() -> {
+            List<CategoryStat> stats = dbHelper.getCategoryStats(userId);
+            List<PieChartView.PieSlice> slices = PieChartView.createSlicesFromStats(stats);
+
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+
+                if (slices.isEmpty()) {
+                    // 没有数据，显示提示
+                    pieChartView.setVisibility(View.GONE);
+                    legendContainer.setVisibility(View.GONE);
+                    noCategoryText.setVisibility(View.VISIBLE);
+                } else {
+                    // 有数据，显示饼图和图例
+                    pieChartView.setVisibility(View.VISIBLE);
+                    legendContainer.setVisibility(View.VISIBLE);
+                    noCategoryText.setVisibility(View.GONE);
+
+                    pieChartView.setData(slices);
+                    renderLegend(legendContainer, slices);
+                }
+            });
+        });
+    }
+
+    /**
+     * 渲染饼图图例
+     */
+    private void renderLegend(LinearLayout container, List<PieChartView.PieSlice> slices) {
+        container.removeAllViews();
+        float density = getResources().getDisplayMetrics().density;
+        int marginTop = (int) (8 * density);
+        int colorBoxSize = (int) (16 * density);
+        int paddingStart = (int) (12 * density);
+
+        for (PieChartView.PieSlice slice : slices) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            rowParams.topMargin = marginTop;
+            row.setLayoutParams(rowParams);
+
+            // 颜色方块
+            View colorBox = new View(this);
+            colorBox.setBackgroundColor(slice.color);
+            LinearLayout.LayoutParams colorParams = new LinearLayout.LayoutParams(
+                    colorBoxSize, colorBoxSize);
+            colorBox.setLayoutParams(colorParams);
+
+            // 文本标签
+            TextView label = new TextView(this);
+            label.setText(String.format(Locale.CHINA, "%s: %d次 (%.1f%%)",
+                    slice.label, slice.count, slice.percentage));
+            label.setTextColor(getColor(R.color.ink));
+            label.setTextSize(14f);
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            labelParams.leftMargin = paddingStart;
+            label.setLayoutParams(labelParams);
+
+            row.addView(colorBox);
+            row.addView(label);
+            container.addView(row);
+        }
     }
 
     /** Build one card per achievement; unlocked cards use the brand color, locked ones are muted. */
