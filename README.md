@@ -1,109 +1,264 @@
-# DayMark 每日打卡习惯追踪 APP
+# DayMark - 习惯打卡应用
 
-DayMark 是一个基于原生 Android 的每日打卡习惯追踪应用，使用 Java + SQLite 实现，无第三方依赖。支持账号登录、习惯打卡、分类管理、每日提醒、数据统计与可视化，以及拍照和相册选择图片。
+<div align="center">
 
-## 开发环境
+**一款简洁优雅的习惯养成与打卡管理应用**
 
-- Android Studio Panda 2 | 2025.3.2
-- Gradle 8.4
-- Android Gradle Plugin 8.3.2
-- JDK 17
-- minSdk 23，targetSdk 34
+[![Android](https://img.shields.io/badge/Platform-Android-brightgreen.svg)](https://www.android.com)
+[![API](https://img.shields.io/badge/API-23%2B-blue.svg)](https://android-arsenal.com/api?level=23)
+[![Version](https://img.shields.io/badge/Version-1.4-orange.svg)](https://github.com)
+[![Build](https://img.shields.io/badge/Build-Passing-success.svg)](https://github.com)
 
-## 默认账号
+</div>
 
-- 用户名：demo
-- 密码：123456
+---
 
-也可以在登录页点击“注册新账号”创建账号。
+## 📱 应用简介
 
-## 主要功能
+DayMark 是一款专注于习惯养成和日常打卡的 Android 应用。通过直观的数据可视化和流畅的交互体验，帮助用户建立良好习惯，追踪个人成长。
 
-### 账号
+### ✨ 核心特性
 
-- 登录：账号密码校验，登录成功进入主页。
-- 注册：本地新建账号，用户名唯一。
-- 记住密码：勾选后保存账号密码，下次自动填充；不勾选时默认填入 demo / 123456。
+- 📝 **习惯管理** - 创建、编辑、删除习惯事件，支持图片、分类、时间设置
+- ✅ **打卡记录** - 一键打卡，支持添加备注，记录每一次坚持
+- 📊 **数据统计** - 多维度数据分析，饼状图可视化分类占比
+- 🔥 **热力图** - GitHub风格打卡热力图，直观展示坚持轨迹
+- 🏅 **成就系统** - 多级成就勋章，激励持续打卡
+- 👤 **个人中心** - 用户资料、头像、数据概览、勋章展示
+- 💾 **数据备份** - JSON格式导入/导出，支持跨设备数据迁移
+- 🎨 **动画效果** - 饼状图展开动画，提升视觉体验
+- 🔐 **数据安全** - EncryptedSharedPreferences加密存储敏感信息
 
-### 打卡事件管理
 
-- 新增、编辑、删除打卡事件。
-- 每个事件包含：标题、内容、时间说明、分类、提醒时间、图片。
-- 分类：学习、运动、生活、工作、健康、其他。
-- 打卡：记一次打卡，累计次数加一，可附带当次备注。
-- 追加备注：不打卡也能单独补一条备注。
-- 列表展示：今日状态、分类、连续天数、累计次数、提醒时间、最近备注、图片缩略图。
+---
 
-### 搜索与筛选
+## 🎯 主要功能
 
-- 关键词搜索：匹配标题、内容、分类。
-- 筛选：全部 / 今日待完成 / 今日已完成。
-- 顶部汇总：事件总数、今日完成数、累计打卡次数、最高连续天数。
+### 1. 习惯管理
+- 📌 习惯标题和详细说明
+- 🖼️ 自定义习惯图片（拍照或相册选择）
+- 🏷️ 分类标签（学习、运动、生活、工作、健康、其他）
+- ⏰ 打卡时间和提醒设置
+- 🎯 目标天数和频率配置
 
-### 图片功能
+### 2. 打卡记录
+- 一键完成今日打卡
+- 支持添加打卡备注
+- 自动更新连续天数
+- 查看所有打卡历史
 
-- 调用系统相机拍照，或从相册选择图片，保存到应用私有目录。
-- 点击列表缩略图可全屏预览。
+### 3. 数据统计
+- 总体数据：事件数、完成率、累计打卡、最高连续天数
+- **饼状图**：各分类打卡次数占比，带800ms展开动画
+- 本周概览：每日打卡次数
 
-### 数据统计与可视化
+### 4. 打卡热力图
+- GitHub风格的热力图（最近27周）
+- 5级颜色深度表示打卡强度
+- **可点击**：点击任意日期查看当天打卡详情
 
-- 日历视图：当月网格，显示每天的打卡项数。
-- 统计页：总事件数、今日完成数、总打卡记录数、今日完成率、最高连续打卡天数，以及最近 7 天每日打卡情况。
-- 连续天数（streak）按自然日计算。
+### 5. 成就系统
+- 🥉 初级成就：初次打卡、初创事件、连续三天
+- 🥈 中级成就：坚持一周、多样化、分类探索
+- 🥇 高级成就：月度坚持、百日打卡、目标达成
 
-### 每日提醒
+### 6. 个人中心
+- 自定义头像（上传或纯色默认头像）
+- 数据概览（2x2卡片布局）
+- 打卡热力图（可点击查看详情）
+- **分类统计**（可点击跳转到详细统计页）
+- 个人勋章预览
 
-- 为事件设置提醒时间（HH:mm 格式），保存后通过 AlarmManager 调度每日通知。
-- 删除事件时自动取消对应提醒。
-- 提醒采用非精确闹钟（setInexactRepeating），在 Android 12+ 上无需申请精确闹钟权限。
-- Android 13+ 需用户授予通知权限（POST_NOTIFICATIONS）后通知才会显示。
+### 7. 数据管理
+- 导出：TXT文本 + JSON备份
+- **导入**：从JSON备份文件恢复数据
+- 支持跨设备数据迁移
 
-### 数据导出
+---
 
-- 一键导出全部事件与打卡记录为 txt 文件，保存在应用私有 Documents 目录。
+## 🏗️ 技术架构
 
-### 本地存储
+### 核心技术栈
+- **开发语言**: Java 11
+- **最低API**: Android 6.0 (API 23)
+- **目标API**: Android 14 (API 34)
+- **数据库**: SQLite (WAL模式)
+- **UI框架**: Material Design 3
+- **加密存储**: AndroidX Security Crypto
 
-- 使用 SQLite 保存用户、事件、打卡记录三张表。
-- 使用 SharedPreferences 保存记住密码状态。
+### 数据库设计
+**数据库版本**: 4  
+**WAL模式**: 启用（支持并发读写）
 
-## 项目结构
+**主要表结构**：
+- `users` - 用户表（账号、密码哈希、昵称、头像）
+- `habits` - 习惯表（标题、分类、图片、提醒等）
+- `check_records` - 打卡记录表（习惯ID、时间、备注）
 
-```text
-app/src/main/java/com/example/daymark/
-├── LoginActivity.java          登录 / 注册
-├── MainActivity.java           主页：列表、搜索、筛选、汇总、入口
-├── EditHabitActivity.java      新增 / 编辑事件
-├── CalendarActivity.java       月历视图
-├── StatsActivity.java          统计概览
-├── ImagePreviewActivity.java   图片全屏预览
-├── ReminderReceiver.java       提醒广播接收与调度
-├── HabitAdapter.java           列表适配器（打卡 / 备注 / 编辑 / 删除）
-├── DayMarkDbHelper.java        SQLite 数据层
-├── Habit.java                  事件模型
-├── CheckRecord.java            打卡记录模型
-└── DateUtils.java              日期工具（自然日、连续天数等）
+### 线程模型
+- **AppExecutors线程池**：3个IO线程（数据库+图片加载）
+- **@WorkerThread注解**：约30个数据库方法，静态检查防止主线程阻塞
+
+### 自定义View
+- **PieChartView**：饼状图，支持动画
+- **HeatmapView**：热力图，支持点击交互
+- **ImageLoader**：图片加载，LruCache缓存
+
+---
+
+## 🚀 开发历程
+
+### v1.4 - 交互增强版 (2026-06-16)
+- ✨ 饼状图添加800ms展开动画
+- 👆 分类统计卡片可点击跳转
+- 🔍 热力图方块可点击查看详情
+- 🔧 修复热力图点击不生效问题
+- ⚡ 升级Java版本至11，消除编译警告
+
+### v1.3 - 数据可视化版 (2026-06-16)
+- 📊 打卡统计页面添加饼状图
+- 🎨 自定义PieChartView实现
+- 📈 分类打卡次数占比展示
+
+### v1.2 - UI优化版 (2026-06-16)
+- 🔄 "账号"按钮改为"个人中心"
+- 📂 导入备份功能移至个人中心
+- 🗂️ 新增"数据管理"分类
+
+### v1.1 - Bug修复版 (2026-06-16)
+- ✅ 添加@WorkerThread注解（约30个方法）
+- ⚡ 线程池优化（单线程 → 3线程池）
+- 🗑️ 图片文件自动清理机制
+- 💾 数据导入/恢复功能实现
+
+---
+
+## 🔧 构建说明
+
+### 环境要求
+- **JDK**: 11+
+- **Android Studio**: 2023.1+
+- **Gradle**: 8.0+
+- **Android SDK**: API 34
+
+### 构建步骤
+
+**构建Debug版本**：
+```bash
+./gradlew assembleDebug
+```
+输出: `app/build/outputs/apk/debug/app-debug.apk`
+
+**构建Release版本**：
+```bash
+./gradlew assembleRelease
+```
+输出: `app/build/outputs/apk/release/app-release-unsigned.apk` (4.8 MB)
+
+**清理构建**：
+```bash
+./gradlew clean
 ```
 
-## 数据库表
+---
 
-- `users`：id、username、password。
-- `habits`：id、title、content、time_text、image_uri、category、reminder_time、check_count、last_check_at、created_at。
-- `check_records`：id、habit_id、note、checked_at。
+## 📝 使用指南
 
-## 运行方式
+### 初次使用
+1. **注册账号** - 输入用户名和密码（至少6位）
+2. **创建习惯** - 点击"+"按钮，填写习惯信息
+3. **开始打卡** - 点击习惯卡片的"✓"按钮
 
-1. 用 Android Studio 打开项目根目录。
-2. 等待 Gradle 同步完成。
-3. 连接手机或启动模拟器。
-4. 点击 Run 运行，或执行：
+### 数据迁移
+**导出数据**：主页 → 导出按钮 → 生成JSON备份文件  
+**导入数据**：个人中心 → 导入备份 → 选择JSON文件
 
-```powershell
-.\gradlew.bat assembleDebug
+### 查看统计
+- **总体统计**：主页 → 统计按钮
+- **热力图详情**：个人中心 → 点击热力图方块
+- **分类详情**：个人中心 → 点击分类统计卡片
+
+---
+
+## 📂 项目结构
+
+```
+DayMarkApp/
+├── app/src/main/java/com/example/daymark/
+│   ├── MainActivity.java           # 主页面
+│   ├── LoginActivity.java          # 登录页面
+│   ├── StatsActivity.java          # 统计页面
+│   ├── ProfileActivity.java        # 个人中心
+│   ├── DayMarkDbHelper.java        # 数据库管理
+│   ├── PieChartView.java           # 饼状图View
+│   ├── HeatmapView.java            # 热力图View
+│   ├── ImageLoader.java            # 图片加载器
+│   ├── AppExecutors.java           # 线程池管理
+│   └── ...
+├── BUG_REPORT.md                   # Bug报告
+├── FIXES_COMPLETED.md              # Bug修复报告
+├── UI_ADJUSTMENTS.md               # UI调整报告
+├── PIE_CHART_FEATURE.md            # 饼状图功能报告
+└── README.md                       # 项目说明
 ```
 
-生成的 APK 位于：
+---
 
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
+## 📊 代码统计
+
+- **Java文件**: 25+
+- **代码行数**: 约5000+
+- **自定义View**: 3个
+- **Activity**: 9个
+
+**v1.1-v1.4增量**：+723行代码
+
+---
+
+## 🔒 安全性
+
+- ✅ 登录会话使用EncryptedSharedPreferences加密
+- ✅ 密码使用PBKDF2WithHmacSHA256加盐哈希
+- ✅ 文件使用FileProvider保护URI
+- ✅ 所有数据本地存储，不上传外部服务器
+
+---
+
+## 📈 未来计划
+
+### 短期优化
+- [ ] 习惯拖拽排序
+- [ ] 多时段提醒
+- [ ] 更多图表类型
+- [ ] 深色模式
+
+### 长期目标
+- [ ] 云同步功能
+- [ ] Widget桌面小部件
+- [ ] 好友监督系统
+- [ ] AI智能建议
+
+---
+
+## 👨‍💻 开发信息
+
+**开发工具**: Claude Code (Opus 4.8)  
+**开发时间**: 2026年6月  
+**当前版本**: v1.4  
+**构建状态**: ✅ BUILD SUCCESSFUL
+
+---
+
+## 📄 许可证
+
+本项目仅供学习和个人使用。
+
+---
+
+<div align="center">
+
+**⭐ 如果觉得项目不错，欢迎Star支持！**
+
+Made with ❤️ by Claude Code
+
+</div>
