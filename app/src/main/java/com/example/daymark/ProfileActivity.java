@@ -34,6 +34,8 @@ public class ProfileActivity extends Activity {
     /** Trailing weeks shown in the heatmap (~half a year, fits the card width comfortably). */
     private static final int HEATMAP_WEEKS = 27;
     private static final int REQUEST_EDIT_PROFILE = 100;
+    /** Request code for importing data from JSON backup file. */
+    private static final int REQUEST_IMPORT_FILE = 101;
 
     private DayMarkDbHelper dbHelper;
     private long userId = DayMarkDbHelper.NO_USER;
@@ -83,6 +85,7 @@ public class ProfileActivity extends Activity {
         achievementContainer = findViewById(R.id.achievementContainer);
         MaterialCardView achievementsCard = findViewById(R.id.achievementsCard);
         MaterialButton editProfileButton = findViewById(R.id.editProfileButton);
+        MaterialButton importBackupButton = findViewById(R.id.importBackupButton);
         MaterialButton logoutButton = findViewById(R.id.logoutButton);
         MaterialButton deleteAccountButton = findViewById(R.id.deleteAccountButton);
         MaterialButton backButton = findViewById(R.id.backButton);
@@ -90,6 +93,7 @@ public class ProfileActivity extends Activity {
         accountText.setText("账号名：" + (username == null ? "" : username));
         editProfileButton.setOnClickListener(v -> goToEditProfile());
         achievementsCard.setOnClickListener(v -> goToAchievements());
+        importBackupButton.setOnClickListener(v -> showImportDialog());
         logoutButton.setOnClickListener(v -> goToLogin());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
         backButton.setOnClickListener(v -> finish());
@@ -120,6 +124,11 @@ public class ProfileActivity extends Activity {
         if (requestCode == REQUEST_EDIT_PROFILE && resultCode == RESULT_OK) {
             // 刷新数据
             refresh();
+        } else if (requestCode == REQUEST_IMPORT_FILE && resultCode == RESULT_OK && data != null) {
+            android.net.Uri uri = data.getData();
+            if (uri != null) {
+                importFromUri(uri);
+            }
         }
     }
 
@@ -300,5 +309,83 @@ public class ProfileActivity extends Activity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
+    }
+
+    /**
+     * Show a dialog to warn the user about data import.
+     */
+    private void showImportDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("导入数据")
+                .setMessage("警告：导入将会覆盖当前所有数据！\n\n请确保您已备份当前数据，导入操作不可撤销。\n\n支持的文件格式：\n• JSON备份文件（db_backup_*.json）")
+                .setPositiveButton("选择备份文件", (dialog, which) -> selectImportFile())
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /**
+     * Launch file picker to select a backup JSON file.
+     */
+    private void selectImportFile() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("application/json");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(
+                    Intent.createChooser(intent, "选择备份文件"),
+                    REQUEST_IMPORT_FILE);
+        } catch (android.content.ActivityNotFoundException e) {
+            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Import database from a URI pointing to a backup JSON file.
+     */
+    private void importFromUri(android.net.Uri uri) {
+        AppExecutors.io().execute(() -> {
+            try {
+                // Copy the URI content to a temporary file
+                java.io.File tempFile = new java.io.File(getCacheDir(), "import_temp.json");
+                try (java.io.InputStream inputStream = getContentResolver().openInputStream(uri);
+                     java.io.OutputStream outputStream = new java.io.FileOutputStream(tempFile)) {
+                    if (inputStream == null) {
+                        throw new java.io.IOException("无法读取文件");
+                    }
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                }
+
+                // Restore from the temporary file
+                boolean success = dbHelper.restoreFromJson(tempFile.getAbsolutePath());
+
+                // Clean up temp file
+                tempFile.delete();
+
+                // Show result on main thread
+                AppExecutors.main().execute(() -> {
+                    if (isFinishing()) {
+                        return;
+                    }
+                    if (success) {
+                        Toast.makeText(this, "导入成功！正在刷新...", Toast.LENGTH_SHORT).show();
+                        refresh();
+                    } else {
+                        Toast.makeText(this, "导入失败，请检查文件格式", Toast.LENGTH_LONG).show();
+                    }
+                });
+
+            } catch (Exception e) {
+                Logger.e("Import failed", e);
+                AppExecutors.main().execute(() -> {
+                    if (!isFinishing()) {
+                        Toast.makeText(this, "导入失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        });
     }
 }

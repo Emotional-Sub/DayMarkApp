@@ -370,6 +370,27 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
+            android:text="数据管理"
+            android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
+            android:textColor="@color/onSurfaceVariant" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/importBackupButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="导入备份"
+            android:textSize="15sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_upload"
+            app:iconGravity="textStart"
+            app:iconSize="20dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
             android:text="账号设置"
             android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
             android:textColor="@color/onSurfaceVariant" />

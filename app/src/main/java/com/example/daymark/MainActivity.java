@@ -44,8 +44,6 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
 
     /** Request code for the Android 13+ runtime notification permission prompt. */
     private static final int REQUEST_POST_NOTIFICATIONS = 30;
-    /** Request code for importing data from JSON backup file. */
-    private static final int REQUEST_IMPORT_FILE = 31;
 
     private DayMarkDbHelper dbHelper;
     private HabitAdapter adapter;
@@ -86,7 +84,6 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         MaterialButton statsButton = findViewById(R.id.statsButton);
         MaterialButton historyButton = findViewById(R.id.historyButton);
         MaterialButton exportButton = findViewById(R.id.exportButton);
-        MaterialButton importButton = findViewById(R.id.importButton);
         allButton = findViewById(R.id.allButton);
         todoButton = findViewById(R.id.todoButton);
         doneTodayButton = findViewById(R.id.doneTodayButton);
@@ -143,9 +140,6 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             startActivity(intent);
         });
         exportButton.setOnClickListener(v -> exportReport());
-        if (importButton != null) {
-            importButton.setOnClickListener(v -> showImportDialog());
-        }
 
         allButton.setOnClickListener(v -> setFilterMode(0));
         todoButton.setOnClickListener(v -> setFilterMode(1));
@@ -392,95 +386,6 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         } catch (IOException e) {
             Toast.makeText(this, "导出失败", Toast.LENGTH_SHORT).show();
         }
-    }
-
-    /**
-     * Show a dialog to let the user choose between importing from JSON backup or text export.
-     */
-    private void showImportDialog() {
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("导入数据")
-                .setMessage("警告：导入将会覆盖当前所有数据！\n\n请确保您已备份当前数据，导入操作不可撤销。\n\n支持的文件格式：\n• JSON备份文件（db_backup_*.json）")
-                .setPositiveButton("选择备份文件", (dialog, which) -> selectImportFile())
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    /**
-     * Launch file picker to select a backup JSON file.
-     */
-    private void selectImportFile() {
-        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.setType("application/json");
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        try {
-            startActivityForResult(
-                    Intent.createChooser(intent, "选择备份文件"),
-                    REQUEST_IMPORT_FILE);
-        } catch (android.content.ActivityNotFoundException e) {
-            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_IMPORT_FILE && resultCode == RESULT_OK && data != null) {
-            android.net.Uri uri = data.getData();
-            if (uri != null) {
-                importFromUri(uri);
-            }
-        }
-    }
-
-    /**
-     * Import database from a URI pointing to a backup JSON file.
-     */
-    private void importFromUri(android.net.Uri uri) {
-        AppExecutors.io().execute(() -> {
-            try {
-                // Copy the URI content to a temporary file
-                File tempFile = new File(getCacheDir(), "import_temp.json");
-                try (java.io.InputStream inputStream = getContentResolver().openInputStream(uri);
-                     java.io.OutputStream outputStream = new java.io.FileOutputStream(tempFile)) {
-                    if (inputStream == null) {
-                        throw new IOException("无法读取文件");
-                    }
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-                    while ((bytesRead = inputStream.read(buffer)) != -1) {
-                        outputStream.write(buffer, 0, bytesRead);
-                    }
-                }
-
-                // Restore from the temporary file
-                boolean success = dbHelper.restoreFromJson(tempFile.getAbsolutePath());
-
-                // Clean up temp file
-                tempFile.delete();
-
-                // Show result on main thread
-                AppExecutors.main().execute(() -> {
-                    if (isFinishing()) {
-                        return;
-                    }
-                    if (success) {
-                        Toast.makeText(this, "导入成功！正在刷新...", Toast.LENGTH_SHORT).show();
-                        refresh();
-                    } else {
-                        Toast.makeText(this, "导入失败，请检查文件格式", Toast.LENGTH_LONG).show();
-                    }
-                });
-
-            } catch (Exception e) {
-                Logger.e("Import failed", e);
-                AppExecutors.main().execute(() -> {
-                    if (!isFinishing()) {
-                        Toast.makeText(this, "导入失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
-                    }
-                });
-            }
-        });
     }
 
     /** Even vertical gap between cards, applied as a bottom offset on every row. */

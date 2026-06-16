@@ -44,7 +44,7 @@
             android:layout_width="wrap_content"
             android:layout_height="42dp"
             android:minWidth="60dp"
-            android:text="账号"
+            android:text="个人中心"
             android:textSize="14sp"
             android:paddingHorizontal="12dp"
             app:cornerRadius="12dp" />
@@ -166,32 +166,6 @@
             android:text="导出"
             android:textSize="13sp"
             app:cornerRadius="12dp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="18dp"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/importButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:text="导入备份"
-            android:textSize="13sp"
-            app:cornerRadius="12dp"
-            app:icon="@android:drawable/ic_menu_upload"
-            app:iconGravity="textStart"
-            app:iconSize="18dp" />
-
-        <Space
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="3" />
     </LinearLayout>
 
     <LinearLayout
