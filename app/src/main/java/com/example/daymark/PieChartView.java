@@ -1,22 +1,26 @@
 package com.example.daymark;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 简单的饼状图View，用于展示分类打卡次数占比
+ * 简单的饼状图View，用于展示分类打卡次数占比，带有展开动画效果
  */
 public class PieChartView extends View {
     private List<PieSlice> slices = new ArrayList<>();
     private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private RectF rect = new RectF();
+    private float animationProgress = 0f; // 动画进度 0.0 ~ 1.0
+    private ValueAnimator animator;
 
     // 预定义的颜色方案
     private static final int[] COLORS = {
@@ -63,7 +67,37 @@ public class PieChartView extends View {
 
     public void setData(List<PieSlice> slices) {
         this.slices = slices;
-        invalidate();
+        startAnimation();
+    }
+
+    /**
+     * 启动扇形展开动画
+     */
+    private void startAnimation() {
+        // 取消之前的动画
+        if (animator != null && animator.isRunning()) {
+            animator.cancel();
+        }
+
+        // 创建动画：从0到1，持续800ms
+        animator = ValueAnimator.ofFloat(0f, 1f);
+        animator.setDuration(800);
+        animator.setInterpolator(new DecelerateInterpolator());
+        animator.addUpdateListener(animation -> {
+            animationProgress = (float) animation.getAnimatedValue();
+            invalidate(); // 触发重绘
+        });
+        animator.start();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        // 清理动画，避免内存泄漏
+        if (animator != null) {
+            animator.cancel();
+            animator = null;
+        }
     }
 
     @Override
@@ -85,11 +119,11 @@ public class PieChartView extends View {
         rect.set(centerX - radius, centerY - radius,
                  centerX + radius, centerY + radius);
 
-        // 绘制饼图扇形
+        // 绘制饼图扇形，应用动画进度
         float startAngle = -90f; // 从12点方向开始
         for (PieSlice slice : slices) {
             paint.setColor(slice.color);
-            float sweepAngle = slice.percentage * 360f / 100f;
+            float sweepAngle = slice.percentage * 360f / 100f * animationProgress; // 应用动画进度
             canvas.drawArc(rect, startAngle, sweepAngle, true, paint);
             startAngle += sweepAngle;
         }

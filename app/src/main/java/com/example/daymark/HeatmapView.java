@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
 
 import java.util.Collections;
@@ -17,6 +18,8 @@ import java.util.Map;
  * labels months at the column where each new month begins. The data is supplied as a map of
  * start-of-day timestamp to count (see {@link DayMarkDbHelper#getDailyCheckCounts}); the view
  * lays out the most recent {@code weeks} columns ending on the current week.
+ *
+ * Supports click interaction to view details for a specific day.
  */
 public class HeatmapView extends View {
     private static final int ROWS = 7;
@@ -44,6 +47,25 @@ public class HeatmapView extends View {
 
     private Map<Long, Integer> counts = Collections.emptyMap();
     private long firstCellDay;
+
+    // 点击监听器
+    private OnDayClickListener onDayClickListener;
+
+    /**
+     * 热力图日期点击监听器
+     */
+    public interface OnDayClickListener {
+        /**
+         * 当用户点击某一天的方块时调用
+         * @param dayTimestamp 该天的开始时间戳（startOfDay）
+         * @param checkCount 该天的打卡次数
+         */
+        void onDayClick(long dayTimestamp, int checkCount);
+    }
+
+    public void setOnDayClickListener(OnDayClickListener listener) {
+        this.onDayClickListener = listener;
+    }
 
     public HeatmapView(Context context) {
         super(context);
@@ -195,5 +217,47 @@ public class HeatmapView extends View {
             return 3;
         }
         return 4;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_UP && onDayClickListener != null) {
+            // 计算点击位置对应的日期
+            int availableWidth = getWidth() - getPaddingLeft() - getPaddingRight() - Math.round(leftGutter);
+            float cell = (availableWidth - (weeks - 1) * cellGap) / weeks;
+            if (cell < 1f) {
+                return super.onTouchEvent(event);
+            }
+
+            float gridLeft = getPaddingLeft() + leftGutter;
+            float gridTop = getPaddingTop() + topGutter;
+            float step = cell + cellGap;
+
+            float x = event.getX();
+            float y = event.getY();
+
+            // 判断点击是否在网格区域内
+            if (x < gridLeft || y < gridTop) {
+                return super.onTouchEvent(event);
+            }
+
+            // 计算点击的列和行
+            int col = (int) ((x - gridLeft) / step);
+            int row = (int) ((y - gridTop) / step);
+
+            // 验证范围
+            if (col >= 0 && col < weeks && row >= 0 && row < ROWS) {
+                long dayTimestamp = firstCellDay + ((long) col * 7 + row) * DateUtils.DAY_MS;
+                long today = DateUtils.startOfDay(System.currentTimeMillis());
+
+                // 只处理过去和今天的日期
+                if (dayTimestamp <= today) {
+                    Integer count = counts.get(dayTimestamp);
+                    onDayClickListener.onDayClick(dayTimestamp, count == null ? 0 : count);
+                    return true;
+                }
+            }
+        }
+        return super.onTouchEvent(event);
     }
 }

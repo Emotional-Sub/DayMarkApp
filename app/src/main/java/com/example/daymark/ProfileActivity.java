@@ -83,6 +83,7 @@ public class ProfileActivity extends Activity {
         categoryStatsText = findViewById(R.id.categoryStatsText);
         heatmapView = findViewById(R.id.heatmapView);
         achievementContainer = findViewById(R.id.achievementContainer);
+        MaterialCardView categoryStatsCard = findViewById(R.id.categoryStatsCard);
         MaterialCardView achievementsCard = findViewById(R.id.achievementsCard);
         MaterialButton editProfileButton = findViewById(R.id.editProfileButton);
         MaterialButton importBackupButton = findViewById(R.id.importBackupButton);
@@ -92,11 +93,17 @@ public class ProfileActivity extends Activity {
 
         accountText.setText("账号名：" + (username == null ? "" : username));
         editProfileButton.setOnClickListener(v -> goToEditProfile());
+        categoryStatsCard.setOnClickListener(v -> goToStats());
         achievementsCard.setOnClickListener(v -> goToAchievements());
         importBackupButton.setOnClickListener(v -> showImportDialog());
         logoutButton.setOnClickListener(v -> goToLogin());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
         backButton.setOnClickListener(v -> finish());
+
+        // 设置热力图点击监听
+        heatmapView.setOnDayClickListener((dayTimestamp, checkCount) -> {
+            showDayDetails(dayTimestamp, checkCount);
+        });
     }
 
     @Override
@@ -116,6 +123,52 @@ public class ProfileActivity extends Activity {
         Intent intent = new Intent(this, AchievementsActivity.class);
         intent.putExtra("user_id", userId);
         startActivity(intent);
+    }
+
+    private void goToStats() {
+        Intent intent = new Intent(this, StatsActivity.class);
+        intent.putExtra("user_id", userId);
+        startActivity(intent);
+    }
+
+    /**
+     * 显示某一天的打卡详情对话框
+     */
+    private void showDayDetails(long dayTimestamp, int checkCount) {
+        AppExecutors.io().execute(() -> {
+            // 获取该天的打卡记录
+            List<CheckRecord> records = dbHelper.getRecordsForDay(userId, dayTimestamp);
+
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+
+                // 构建对话框内容
+                String dateStr = DateUtils.formatDate(dayTimestamp);
+                StringBuilder content = new StringBuilder();
+
+                if (records.isEmpty()) {
+                    content.append("这一天还没有打卡记录");
+                } else {
+                    content.append("共打卡 ").append(checkCount).append(" 次：\n\n");
+                    for (CheckRecord record : records) {
+                        content.append("✓ ").append(record.habitTitle).append("\n");
+                        if (record.note != null && !record.note.isEmpty()) {
+                            content.append("  备注：").append(record.note).append("\n");
+                        }
+                        content.append("  ").append(DateUtils.formatDateTime(record.checkedAt)).append("\n\n");
+                    }
+                }
+
+                // 显示对话框
+                new AlertDialog.Builder(this)
+                        .setTitle(dateStr)
+                        .setMessage(content.toString())
+                        .setPositiveButton("确定", null)
+                        .show();
+            });
+        });
     }
 
     @Override

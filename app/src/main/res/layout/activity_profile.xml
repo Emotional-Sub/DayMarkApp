@@ -279,9 +279,12 @@
 
         <!-- Category stats card -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/categoryStatsCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:clickable="true"
+            android:focusable="true"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
             app:contentPadding="16dp">
@@ -291,11 +294,26 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="分类统计"
-                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="分类统计"
+                        android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="查看详情 >"
+                        android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
+                        android:textColor="@color/primary" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/categoryStatsText"
