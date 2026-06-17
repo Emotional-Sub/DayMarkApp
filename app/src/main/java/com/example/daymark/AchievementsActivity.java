@@ -25,7 +25,6 @@ public class AchievementsActivity extends Activity {
 
         dbHelper = new DayMarkDbHelper(this);
         userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
-
         if (userId == DayMarkDbHelper.NO_USER) {
             finish();
             return;
@@ -35,32 +34,39 @@ public class AchievementsActivity extends Activity {
         totalCountText = findViewById(R.id.totalCountText);
         achievementsContainer = findViewById(R.id.achievementsContainer);
         MaterialButton backButton = findViewById(R.id.backButton);
-
         backButton.setOnClickListener(v -> finish());
+    }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
         loadAchievements();
     }
 
     private void loadAchievements() {
-        List<Achievement> achievements = dbHelper.getAchievements(userId);
-        int unlockedCount = 0;
-
-        for (Achievement achievement : achievements) {
-            if (achievement.unlocked) {
-                unlockedCount++;
+        AppExecutors.io().execute(() -> {
+            List<Achievement> achievements = dbHelper.getAchievements(userId);
+            int unlockedCount = 0;
+            for (Achievement achievement : achievements) {
+                if (achievement.unlocked) {
+                    unlockedCount++;
+                }
             }
-        }
-
-        unlockedCountText.setText("已获得: " + unlockedCount);
-        totalCountText.setText("总计: " + achievements.size());
-
-        renderAchievements(achievements);
+            final int unlocked = unlockedCount;
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                unlockedCountText.setText("已获得 " + unlocked);
+                totalCountText.setText("总计: " + achievements.size());
+                renderAchievements(achievements);
+            });
+        });
     }
 
     private void renderAchievements(List<Achievement> achievements) {
         achievementsContainer.removeAllViews();
         float density = getResources().getDisplayMetrics().density;
-
         for (int i = 0; i < achievements.size(); i++) {
             Achievement achievement = achievements.get(i);
             MaterialCardView card = AchievementBadgeRenderer.create(this, achievement, i, true);

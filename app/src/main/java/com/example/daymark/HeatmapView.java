@@ -39,6 +39,7 @@ public class HeatmapView extends View {
 
     private final Paint cellPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF cellRect = new RectF();
     private int weeks = DEFAULT_WEEKS;
     private float cellGap;
     private float cellRadius;
@@ -140,7 +141,6 @@ public class HeatmapView extends View {
         drawMonthLabels(canvas, gridLeft, step, cell);
 
         long today = DateUtils.startOfDay(System.currentTimeMillis());
-        RectF rect = new RectF();
         for (int col = 0; col < weeks; col++) {
             for (int row = 0; row < ROWS; row++) {
                 long day = firstCellDay + ((long) col * 7 + row) * DateUtils.DAY_MS;
@@ -149,10 +149,10 @@ public class HeatmapView extends View {
                 }
                 float left = gridLeft + col * step;
                 float top = gridTop + row * step;
-                rect.set(left, top, left + cell, top + cell);
+                cellRect.set(left, top, left + cell, top + cell);
                 Integer count = counts.get(day);
                 cellPaint.setColor(LEVEL_COLORS[levelFor(count == null ? 0 : count)]);
-                canvas.drawRoundRect(rect, cellRadius, cellRadius, cellPaint);
+                canvas.drawRoundRect(cellRect, cellRadius, cellRadius, cellPaint);
             }
         }
     }

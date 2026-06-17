@@ -496,16 +496,26 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             dir = getFilesDir();
         }
         if (!dir.exists() && !dir.mkdirs()) {
-            Toast.makeText(this, "导出目录创建失败", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "????????????", Toast.LENGTH_SHORT).show();
             return;
         }
         File file = new File(dir, "DayMark_export_" + System.currentTimeMillis() + ".txt");
-        try (FileOutputStream outputStream = new FileOutputStream(file)) {
-            outputStream.write(dbHelper.buildExportText(userId).getBytes(StandardCharsets.UTF_8));
-            Toast.makeText(this, "已导出：" + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
-        } catch (IOException e) {
-            Toast.makeText(this, "导出失败", Toast.LENGTH_SHORT).show();
-        }
+        AppExecutors.io().execute(() -> {
+            try (FileOutputStream outputStream = new FileOutputStream(file)) {
+                outputStream.write(dbHelper.buildExportText(userId).getBytes(StandardCharsets.UTF_8));
+                AppExecutors.main().execute(() -> {
+                    if (!isFinishing()) {
+                        Toast.makeText(this, "??????" + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (IOException e) {
+                AppExecutors.main().execute(() -> {
+                    if (!isFinishing()) {
+                        Toast.makeText(this, "??????", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
     }
 
     /** Even vertical gap between cards, applied as a bottom offset on every row. */

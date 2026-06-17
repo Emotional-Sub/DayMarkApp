@@ -1,13 +1,12 @@
 package com.example.daymark;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.CheckBox;
 import android.widget.Toast;
-
-import android.app.Activity;
 
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKeys;
@@ -24,7 +23,6 @@ public class LoginActivity extends Activity {
     private CheckBox rememberCheck;
     private DayMarkDbHelper dbHelper;
     private SharedPreferences preferences;
-    // Encrypted store for the remembered password and session data.
     private SharedPreferences securePreferences;
 
     @Override
@@ -35,12 +33,8 @@ public class LoginActivity extends Activity {
         preferences = getSharedPreferences("login", MODE_PRIVATE);
         securePreferences = createSecurePreferences();
 
-        // If a previous login left a valid session, skip the login screen entirely and go
-        // straight to the app. Only an explicit logout clears this session.
-        // Session data is now stored in encrypted preferences for security.
         long sessionUserId = DayMarkDbHelper.NO_USER;
         String sessionUsername = null;
-
         if (securePreferences != null) {
             try {
                 sessionUserId = securePreferences.getLong("session_user_id", DayMarkDbHelper.NO_USER);
@@ -49,7 +43,6 @@ public class LoginActivity extends Activity {
                 Logger.securityError("Failed to read encrypted session", e);
             }
         }
-
         if (sessionUserId != DayMarkDbHelper.NO_USER) {
             goToMain(sessionUserId, sessionUsername);
             return;
@@ -72,8 +65,6 @@ public class LoginActivity extends Activity {
     }
 
     private void loadRememberedAccount() {
-        // Older versions persisted the plaintext password in the plain "login" prefs; drop it so a
-        // previously-stored plaintext password never lingers there.
         if (preferences.contains("password")) {
             preferences.edit().remove("password").apply();
         }
@@ -96,39 +87,35 @@ public class LoginActivity extends Activity {
         if (!validate(username, password)) {
             return;
         }
-        long userId = dbHelper.login(username, password);
-        if (userId != DayMarkDbHelper.NO_USER) {
-            saveRememberState(username, password);
-            // Persist the session in encrypted preferences so the next launch goes straight to
-            // the app without logging in. Store both user_id and username.
-            if (securePreferences != null) {
-                try {
-                    securePreferences.edit()
-                            .putLong("session_user_id", userId)
-                            .putString("session_username", username)
-                            .apply();
-                    Logger.d("Session saved securely for user: " + username);
-                } catch (Exception e) {
-                    Logger.securityError("Failed to save encrypted session", e);
+        AppExecutors.io().execute(() -> {
+            long userId = dbHelper.login(username, password);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
                 }
-            }
-            // Clear any legacy session data from unencrypted preferences
-            preferences.edit()
-                    .remove("session_user_id")
-                    .remove("session_username")
-                    .apply();
-            goToMain(userId, username);
-        } else {
-            Toast.makeText(this, "账号或密码不正确", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void goToMain(long userId, String username) {
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.putExtra("user_id", userId);
-        intent.putExtra("username", username);
-        startActivity(intent);
-        finish();
+                if (userId != DayMarkDbHelper.NO_USER) {
+                    saveRememberState(username, password);
+                    if (securePreferences != null) {
+                        try {
+                            securePreferences.edit()
+                                    .putLong("session_user_id", userId)
+                                    .putString("session_username", username)
+                                    .apply();
+                            Logger.d("Session saved securely for user: " + username);
+                        } catch (Exception e) {
+                            Logger.securityError("Failed to save encrypted session", e);
+                        }
+                    }
+                    preferences.edit()
+                            .remove("session_user_id")
+                            .remove("session_username")
+                            .apply();
+                    goToMain(userId, username);
+                } else {
+                    Toast.makeText(this, "账号或密码不正确", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
 
     private void doRegister() {
@@ -137,11 +124,19 @@ public class LoginActivity extends Activity {
         if (!validate(username, password)) {
             return;
         }
-        if (dbHelper.register(username, password) != DayMarkDbHelper.NO_USER) {
-            Toast.makeText(this, "注册成功，请登录", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(this, "用户名已存在", Toast.LENGTH_SHORT).show();
-        }
+        AppExecutors.io().execute(() -> {
+            long result = dbHelper.register(username, password);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (result != DayMarkDbHelper.NO_USER) {
+                    Toast.makeText(this, "注册成功，请登录", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "用户名已存在", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
 
     private boolean validate(String username, String password) {
@@ -156,6 +151,14 @@ public class LoginActivity extends Activity {
         return true;
     }
 
+    private void goToMain(long userId, String username) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra("user_id", userId);
+        intent.putExtra("username", username);
+        startActivity(intent);
+        finish();
+    }
+
     private void saveRememberState(String username, String password) {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean("remember", rememberCheck.isChecked());
@@ -164,7 +167,6 @@ public class LoginActivity extends Activity {
         } else {
             editor.remove("username");
         }
-        // Clear any plaintext password left by an older version regardless of the checkbox.
         editor.remove("password");
         editor.apply();
 
@@ -189,8 +191,6 @@ public class LoginActivity extends Activity {
                     EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
         } catch (GeneralSecurityException | IOException e) {
-            // If the keystore is unavailable we fall back to not remembering the password
-            // rather than crashing the login screen.
             Logger.securityError("Failed to create encrypted preferences", e);
             return null;
         }

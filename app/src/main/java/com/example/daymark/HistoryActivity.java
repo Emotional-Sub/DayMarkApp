@@ -115,9 +115,17 @@ public class HistoryActivity extends Activity {
     }
 
     private void loadData() {
-        allRecords = dbHelper.getAllRecords(userId);
-        buildFilterOptions();
-        applyFilter(habitFilterSpinner.getSelectedItemPosition());
+        AppExecutors.io().execute(() -> {
+            List<CheckRecord> records = dbHelper.getAllRecords(userId);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                allRecords = records;
+                buildFilterOptions();
+                applyFilter(habitFilterSpinner.getSelectedItemPosition());
+            });
+        });
     }
 
     /**

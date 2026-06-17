@@ -8,4 +8,8 @@
     <external-files-path
         name="avatar_pictures"
         path="Pictures/" />
+    <!-- Internal fallback when external app files are unavailable -->
+    <files-path
+        name="avatar_private"
+        path="avatar_pictures/" />
 </paths>

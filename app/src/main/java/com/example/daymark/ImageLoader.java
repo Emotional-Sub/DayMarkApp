@@ -10,6 +10,7 @@ import android.widget.ImageView;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Locale;
 
 /**
  * Loads habit photos into ImageViews off the main thread, downsampled to roughly the target view
@@ -47,7 +48,11 @@ public final class ImageLoader {
      * @param level the memory trim level from ComponentCallbacks2
      */
     public static void onTrimMemory(int level) {
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
+            // App is first to be killed; clear everything
+            Logger.w("Memory pressure COMPLETE, clearing image cache");
+            clearCache();
+        } else if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
             // App is in the middle of the LRU list; trim to half size
             Logger.w("Memory pressure MODERATE, trimming image cache to 50%");
             trimCacheToPercent(50);
@@ -55,10 +60,6 @@ public final class ImageLoader {
             // Device is running low on memory; trim to 25%
             Logger.w("Memory pressure RUNNING_LOW, trimming image cache to 25%");
             trimCacheToPercent(25);
-        } else if (level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
-            // App is first to be killed; clear everything
-            Logger.w("Memory pressure COMPLETE, clearing image cache");
-            clearCache();
         }
     }
 
@@ -87,7 +88,7 @@ public final class ImageLoader {
      * Get current cache statistics for debugging.
      */
     public static String getCacheStats() {
-        return String.format("Cache: %d/%d KB (%.1f%% full)",
+        return String.format(Locale.CHINA, "Cache: %d/%d KB (%.1f%% full)",
                 memoryCache.size(),
                 memoryCache.maxSize(),
                 memoryCache.size() * 100.0f / memoryCache.maxSize());

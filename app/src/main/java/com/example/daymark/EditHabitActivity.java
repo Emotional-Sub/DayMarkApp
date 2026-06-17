@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.TimePickerDialog;
+import android.content.ClipData;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -344,7 +345,8 @@ public class EditHabitActivity extends Activity {
         pendingCameraFile = target;
         Uri outputUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", target);
         intent.putExtra(MediaStore.EXTRA_OUTPUT, outputUri);
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setClipData(ClipData.newRawUri("habit_photo", outputUri));
         startActivityForResult(intent, REQUEST_CAMERA);
     }
 
@@ -579,13 +581,8 @@ public class EditHabitActivity extends Activity {
             return;
         }
         try {
-            Uri uri = Uri.parse(imageUri);
-            String path = uri.getPath();
-            if (path != null) {
-                File file = new File(path);
-                if (file.exists() && file.delete()) {
-                    Logger.d("Deleted old image: " + file.getName());
-                }
+            if (ImageUtils.deleteOwnedImage(this, imageUri)) {
+                Logger.d("Deleted old image: " + imageUri);
             }
         } catch (Exception e) {
             Logger.w("Failed to delete old image: " + imageUri, e);

@@ -31,6 +31,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
+    public static final int PROFILE_UPDATE_OK = 0;
+    public static final int PROFILE_UPDATE_OLD_PASSWORD_REQUIRED = 1;
+    public static final int PROFILE_UPDATE_OLD_PASSWORD_INCORRECT = 2;
+    public static final int PROFILE_UPDATE_FAILED = 3;
 
     private final Context context;
 
@@ -174,6 +178,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     int displayNameIdx = cursor.getColumnIndex("display_name");
                     if (displayNameIdx >= 0 && !cursor.isNull(displayNameIdx)) {
                         user.put("display_name", cursor.getString(displayNameIdx));
+                    }
+                    int avatarUriIdx = cursor.getColumnIndex("avatar_uri");
+                    if (avatarUriIdx >= 0 && !cursor.isNull(avatarUriIdx)) {
+                        user.put("avatar_uri", cursor.getString(avatarUriIdx));
                     }
                     users.put(user);
                 }
@@ -693,13 +701,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      */
     private void deleteImageFile(Context context, String imageUri) {
         try {
-            Uri uri = Uri.parse(imageUri);
-            String path = uri.getPath();
-            if (path != null) {
-                File file = new File(path);
-                if (file.exists() && file.delete()) {
-                    Logger.d("Deleted habit image: " + file.getName());
-                }
+            if (ImageUtils.deleteOwnedImage(context, imageUri)) {
+                Logger.d("Deleted habit image: " + imageUri);
             }
         } catch (Exception e) {
             Logger.w("Failed to delete habit image: " + imageUri, e);
@@ -936,6 +939,62 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Update display name/avatar and optionally password in one transaction so validation failure
+     * never leaves the profile half-saved.
+     */
+    @WorkerThread
+    public int updateProfile(long userId, String displayName, String avatarUri,
+                             String oldPassword, String newPassword) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            boolean changePassword = !TextUtils.isEmpty(newPassword);
+            ContentValues values = new ContentValues();
+            String trimmedName = displayName == null ? "" : displayName.trim();
+            if (TextUtils.isEmpty(trimmedName)) {
+                values.putNull("display_name");
+            } else {
+                values.put("display_name", trimmedName);
+            }
+            if (TextUtils.isEmpty(avatarUri)) {
+                values.putNull("avatar_uri");
+            } else {
+                values.put("avatar_uri", avatarUri);
+            }
+
+            if (changePassword) {
+                if (TextUtils.isEmpty(oldPassword)) {
+                    return PROFILE_UPDATE_OLD_PASSWORD_REQUIRED;
+                }
+                String storedHash;
+                String salt;
+                try (Cursor cursor = db.query("users", new String[]{"password", "salt"}, "id=?",
+                        new String[]{String.valueOf(userId)}, null, null, null)) {
+                    if (!cursor.moveToFirst()) {
+                        return PROFILE_UPDATE_FAILED;
+                    }
+                    storedHash = cursor.getString(0);
+                    salt = cursor.isNull(1) ? "" : cursor.getString(1);
+                }
+                if (!PasswordUtils.matches(oldPassword, salt, storedHash)) {
+                    return PROFILE_UPDATE_OLD_PASSWORD_INCORRECT;
+                }
+                String newSalt = PasswordUtils.newSalt();
+                values.put("salt", newSalt);
+                values.put("password", PasswordUtils.hash(newPassword, newSalt));
+            }
+
+            if (db.update("users", values, "id=?", new String[]{String.valueOf(userId)}) <= 0) {
+                return PROFILE_UPDATE_FAILED;
+            }
+            db.setTransactionSuccessful();
+            return PROFILE_UPDATE_OK;
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    /**
      * @return true if the current password matched and was updated.
      */
     @WorkerThread
@@ -969,6 +1028,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     @WorkerThread
     public boolean deleteUser(long userId) {
         List<Habit> habits = getAllHabits(userId);
+        String avatarUri = getAvatarUri(userId);
         for (Habit habit : habits) {
             ReminderReceiver.cancel(context, habit.id);
         }
@@ -981,6 +1041,14 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             db.delete("habits", "user_id=?", new String[]{String.valueOf(userId)});
             int removed = db.delete("users", "id=?", new String[]{String.valueOf(userId)});
             db.setTransactionSuccessful();
+            if (removed > 0) {
+                for (Habit habit : habits) {
+                    deleteImageFile(context, habit.imageUri);
+                }
+                if (!TextUtils.isEmpty(avatarUri)) {
+                    ImageUtils.deleteOwnedImage(context, avatarUri);
+                }
+            }
             return removed > 0;
         } finally {
             db.endTransaction();
@@ -1055,6 +1123,37 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 new String[]{String.valueOf(userId), String.valueOf(dayStart), String.valueOf(dayEnd)})) {
             return cursor.moveToFirst() ? cursor.getInt(0) : 0;
         }
+    }
+
+    /**
+     * Distinct checked-habit count per day within [fromInclusive, toExclusive), keyed by
+     * start-of-day timestamp. Used by the calendar month grid to avoid one query per cell.
+     */
+    @WorkerThread
+    public Map<Long, Integer> getCheckedHabitCountsByDay(long userId, long fromInclusive, long toExclusive) {
+        Map<Long, Set<Long>> distinctHabits = new HashMap<>();
+        SQLiteDatabase db = getReadableDatabase();
+        String sql = "SELECT r.checked_at, r.habit_id " +
+                "FROM check_records r JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=? AND r.checked_at>=? AND r.checked_at<?";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId),
+                String.valueOf(fromInclusive), String.valueOf(toExclusive)})) {
+            while (cursor.moveToNext()) {
+                long day = DateUtils.startOfDay(cursor.getLong(0));
+                long habitId = cursor.getLong(1);
+                Set<Long> ids = distinctHabits.get(day);
+                if (ids == null) {
+                    ids = new HashSet<>();
+                    distinctHabits.put(day, ids);
+                }
+                ids.add(habitId);
+            }
+        }
+        Map<Long, Integer> counts = new HashMap<>();
+        for (Map.Entry<Long, Set<Long>> entry : distinctHabits.entrySet()) {
+            counts.put(entry.getKey(), entry.getValue().size());
+        }
+        return counts;
     }
 
     /**
@@ -1202,7 +1301,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
             StringBuilder jsonBuilder = new StringBuilder();
             try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.FileReader(backupFile))) {
+                    new java.io.InputStreamReader(new java.io.FileInputStream(backupFile),
+                            StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     jsonBuilder.append(line);
@@ -1219,6 +1319,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             JSONArray users = backup.getJSONArray("users");
             JSONArray habits = backup.getJSONArray("habits");
             JSONArray records = backup.getJSONArray("check_records");
+            List<Habit> oldReminderHabits = getHabitsWithReminder();
 
             SQLiteDatabase db = getWritableDatabase();
             db.beginTransaction();
@@ -1301,11 +1402,17 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 Logger.i("Database restore completed successfully");
                 Logger.i("Restored: " + users.length() + " users, " +
                         habits.length() + " habits, " + records.length() + " records");
-                return true;
-
             } finally {
                 db.endTransaction();
             }
+
+            for (Habit habit : oldReminderHabits) {
+                ReminderReceiver.cancel(context, habit.id);
+            }
+            for (Habit habit : getHabitsWithReminder()) {
+                ReminderReceiver.schedule(context, habit);
+            }
+            return true;
 
         } catch (Exception e) {
             Logger.e("Database restore failed", e);

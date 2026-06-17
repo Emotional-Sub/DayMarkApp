@@ -1,6 +1,6 @@
 <resources>
     <!-- Main Theme - Material 3 Dark -->
-    <style name="Theme.DayMark" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.DayMark.Base" parent="Theme.Material3.Dark.NoActionBar">
         <!-- Primary -->
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/onPrimary</item>
@@ -43,7 +43,6 @@
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/surface</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
 
         <!-- Typography -->
         <item name="android:fontFamily">sans-serif</item>
@@ -54,4 +53,6 @@
         <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.DayMark.MediumComponent</item>
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.DayMark.LargeComponent</item>
     </style>
+
+    <style name="Theme.DayMark" parent="@style/Theme.DayMark.Base" />
 </resources>

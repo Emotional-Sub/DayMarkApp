@@ -47,7 +47,6 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         notifyDataSetChanged();
     }
 
-    /** Current ids in display order, for persisting a manual drag reorder. */
     public List<Long> currentOrderIds() {
         List<Long> ids = new ArrayList<>(data.size());
         for (Habit habit : data) {
@@ -56,7 +55,6 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         return ids;
     }
 
-    /** Swap two rows during a drag and animate the move; persistence happens on drop. */
     public void onItemMove(int fromPosition, int toPosition) {
         if (fromPosition < 0 || toPosition < 0
                 || fromPosition >= data.size() || toPosition >= data.size()) {
@@ -90,20 +88,20 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         holder.timeText.setText("时间：" + habit.timeText);
         holder.contentText.setText(habit.content);
         holder.statusText.setText(statusFor(habit));
-        holder.metaText.setText("分类：" + habit.category +
-                "  |  " + habit.frequencyLabel() +
-                "  |  " + habit.streakLabel() +
-                "  |  累计 " + habit.checkCount + " 次" +
-                (TextUtils.isEmpty(habit.reminderTime) ? "" : "  |  提醒 " + habit.reminderTime));
+        holder.metaText.setText("分类：" + habit.category
+                + "  |  " + habit.frequencyLabel()
+                + "  |  " + habit.streakLabel()
+                + "  |  累计 " + habit.checkCount + " 次"
+                + (TextUtils.isEmpty(habit.reminderTime) ? "" : "  |  提醒 " + habit.reminderTime));
         holder.noteText.setText(TextUtils.isEmpty(habit.lastNote) ? "最近备注：暂无" : "最近备注：" + habit.lastNote);
 
         if (habit.hasGoal()) {
             holder.goalText.setVisibility(View.VISIBLE);
             holder.goalProgress.setVisibility(View.VISIBLE);
             holder.goalText.setText(habit.goalReached()
-                    ? "目标已达成：坚持 " + habit.targetDays + " 天 🎉"
+                    ? "目标已达成：坚持 " + habit.targetDays + " 天"
                     : "目标进度：" + habit.totalDays + " / " + habit.targetDays + " 天（"
-                            + habit.goalProgress() + "%）");
+                    + habit.goalProgress() + "%）");
             holder.goalProgress.setProgress(habit.goalProgress());
         } else {
             holder.goalText.setVisibility(View.GONE);
@@ -112,7 +110,6 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
 
         if (!TextUtils.isEmpty(habit.imageUri)) {
             holder.photoView.setVisibility(View.VISIBLE);
-            // 150dp image slot; decode to about that size, off the main thread (see ImageLoader).
             int targetPx = (int) (150 * context.getResources().getDisplayMetrics().density);
             ImageLoader.load(holder.photoView, habit.imageUri, targetPx);
             holder.photoView.setOnClickListener(v -> {
@@ -136,7 +133,6 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         holder.deleteButton.setOnClickListener(v -> confirmDelete(habit));
     }
 
-    /** Status line reflecting today's schedule: done, due, or not scheduled today. */
     private String statusFor(Habit habit) {
         if (habit.isCheckedToday()) {
             return "今日已完成";
@@ -154,7 +150,6 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
                 .setView(input)
                 .setPositiveButton("保存", (dialog, which) -> {
                     String note = input.getText().toString().trim();
-                    // DB write off the main thread; report back on the UI thread.
                     AppExecutors.io().execute(() -> {
                         boolean ok = dbHelper.markChecked(habit.id, note);
                         AppExecutors.main().execute(() -> {
@@ -229,14 +224,19 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.ViewHolder> 
         new AlertDialog.Builder(context)
                 .setTitle("删除事件")
                 .setMessage("确定删除“" + habit.title + "”吗？")
-                .setPositiveButton("删除", (dialog, which) -> {
-                    // Cancel the alarm on the main thread (cheap, no DB), delete off-thread.
-                    ReminderReceiver.cancel(context, habit.id);
-                    AppExecutors.io().execute(() -> {
-                        dbHelper.deleteHabit(habit.id);
-                        AppExecutors.main().execute(listener::onChanged);
+                .setPositiveButton("删除", (dialog, which) -> AppExecutors.io().execute(() -> {
+                    boolean deleted = dbHelper.deleteHabit(habit.id);
+                    if (deleted) {
+                        ReminderReceiver.cancel(context, habit.id);
+                    }
+                    AppExecutors.main().execute(() -> {
+                        if (deleted) {
+                            listener.onChanged();
+                        } else {
+                            Toast.makeText(context, "删除失败", Toast.LENGTH_SHORT).show();
+                        }
                     });
-                })
+                }))
                 .setNegativeButton("取消", null)
                 .show();
     }

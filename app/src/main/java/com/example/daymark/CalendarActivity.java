@@ -12,12 +12,8 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
-/**
- * Month-at-a-glance check-in calendar. Each day cell shows how many distinct events were
- * checked in that day. Tapping a day opens {@link DayDetailActivity}, where the user can see
- * that day's check-ins and back-fill one. The ‹ / › buttons move between months.
- */
 public class CalendarActivity extends Activity {
     private static final String[] WEEKDAY_HEADERS = {"一", "二", "三", "四", "五", "六", "日"};
 
@@ -28,10 +24,7 @@ public class CalendarActivity extends Activity {
     private TextView monthText;
     private ArrayAdapter<String> adapter;
     private final List<String> cells = new ArrayList<>();
-    /** Parallel to {@link #cells}: start-of-day for a day cell, or -1 for headers/blanks. */
     private final List<Long> cellDates = new ArrayList<>();
-
-    /** First day of the month currently shown. */
     private final Calendar displayMonth = Calendar.getInstance(Locale.CHINA);
 
     @Override
@@ -52,7 +45,6 @@ public class CalendarActivity extends Activity {
         calendarGrid.setAdapter(adapter);
 
         displayMonth.set(Calendar.DAY_OF_MONTH, 1);
-
         calendarGrid.setOnItemClickListener((parent, view, position, id) -> onCellTapped(position));
         prevMonthButton.setOnClickListener(v -> {
             displayMonth.add(Calendar.MONTH, -1);
@@ -68,12 +60,29 @@ public class CalendarActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Re-render on return so a back-filled check-in from DayDetailActivity shows up.
         render();
     }
 
-    /** Rebuild the grid (headers, leading blanks, day cells) for {@link #displayMonth}. */
     private void render() {
+        Calendar month = (Calendar) displayMonth.clone();
+        month.set(Calendar.DAY_OF_MONTH, 1);
+        final long monthStart = DateUtils.startOfDay(month.getTimeInMillis());
+        final long nextMonthStart = DateUtils.addMonths(monthStart, 1);
+        monthText.setText(String.format(Locale.CHINA, "%d 年 %d 月",
+                month.get(Calendar.YEAR), month.get(Calendar.MONTH) + 1));
+
+        AppExecutors.io().execute(() -> {
+            Map<Long, Integer> counts = dbHelper.getCheckedHabitCountsByDay(userId, monthStart, nextMonthStart);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                buildMonthCells(month, counts);
+            });
+        });
+    }
+
+    private void buildMonthCells(Calendar month, Map<Long, Integer> counts) {
         cells.clear();
         cellDates.clear();
 
@@ -81,11 +90,6 @@ public class CalendarActivity extends Activity {
             cells.add(header);
             cellDates.add(-1L);
         }
-
-        Calendar month = (Calendar) displayMonth.clone();
-        month.set(Calendar.DAY_OF_MONTH, 1);
-        monthText.setText(String.format(Locale.CHINA, "%d 年 %d 月",
-                month.get(Calendar.YEAR), month.get(Calendar.MONTH) + 1));
 
         int firstDay = month.get(Calendar.DAY_OF_WEEK);
         int blanks = firstDay == Calendar.SUNDAY ? 6 : firstDay - 2;
@@ -95,14 +99,14 @@ public class CalendarActivity extends Activity {
         }
 
         int maxDay = month.getActualMaximum(Calendar.DAY_OF_MONTH);
+        Calendar dayCursor = (Calendar) month.clone();
         for (int day = 1; day <= maxDay; day++) {
-            month.set(Calendar.DAY_OF_MONTH, day);
-            long dayStart = DateUtils.startOfDay(month.getTimeInMillis());
-            int count = dbHelper.getCheckedHabitCountForDay(dayStart, userId);
-            cells.add(day + "\n" + (count > 0 ? count + " 项" : "-"));
+            dayCursor.set(Calendar.DAY_OF_MONTH, day);
+            long dayStart = DateUtils.startOfDay(dayCursor.getTimeInMillis());
+            Integer count = counts.get(dayStart);
+            cells.add(day + "\n" + ((count != null && count > 0) ? count + " 项" : "-"));
             cellDates.add(dayStart);
         }
-
         adapter.notifyDataSetChanged();
     }
 
@@ -112,7 +116,7 @@ public class CalendarActivity extends Activity {
         }
         long dayStart = cellDates.get(position);
         if (dayStart < 0) {
-            return; // Header or blank cell.
+            return;
         }
         Intent intent = new Intent(this, DayDetailActivity.class);
         intent.putExtra("user_id", userId);

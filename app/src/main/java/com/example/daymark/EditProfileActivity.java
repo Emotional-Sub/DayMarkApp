@@ -5,12 +5,11 @@ import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.text.TextUtils;
-import android.view.ViewGroup;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -30,9 +29,19 @@ public class EditProfileActivity extends Activity {
     private static final int REQUEST_PICK_PHOTO = 2;
     private static final int REQUEST_CAMERA_PERMISSION = 3;
 
+    private static final int[] DEFAULT_AVATAR_COLORS = {
+            0xFF4CAF50,
+            0xFF2196F3,
+            0xFFFF9800,
+            0xFFE91E63,
+            0xFF9C27B0,
+            0xFF00BCD4,
+            0xFFFFEB3B,
+            0xFFFF5722
+    };
+
     private DayMarkDbHelper dbHelper;
     private long userId = DayMarkDbHelper.NO_USER;
-    private String username;
 
     private ImageView avatarImage;
     private TextInputEditText displayNameEdit;
@@ -41,19 +50,8 @@ public class EditProfileActivity extends Activity {
     private TextInputEditText confirmPasswordEdit;
 
     private String currentAvatarUri;
+    private String originalAvatarUri;
     private Uri photoUri;
-
-    // 默认头像颜色（8个预设颜色）
-    private static final int[] DEFAULT_AVATAR_COLORS = {
-            0xFF4CAF50, // 绿色
-            0xFF2196F3, // 蓝色
-            0xFFFF9800, // 橙色
-            0xFFE91E63, // 粉色
-            0xFF9C27B0, // 紫色
-            0xFF00BCD4, // 青色
-            0xFFFFEB3B, // 黄色
-            0xFFFF5722  // 深橙色
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,8 +60,6 @@ public class EditProfileActivity extends Activity {
 
         dbHelper = new DayMarkDbHelper(this);
         userId = getIntent().getLongExtra("user_id", DayMarkDbHelper.NO_USER);
-        username = getIntent().getStringExtra("username");
-
         if (userId == DayMarkDbHelper.NO_USER) {
             finish();
             return;
@@ -80,7 +76,6 @@ public class EditProfileActivity extends Activity {
         MaterialButton saveButton = findViewById(R.id.saveButton);
         MaterialButton cancelButton = findViewById(R.id.cancelButton);
 
-        // 加载当前数据
         loadCurrentData();
 
         chooseDefaultAvatarButton.setOnClickListener(v -> showDefaultAvatarPicker());
@@ -91,34 +86,46 @@ public class EditProfileActivity extends Activity {
     }
 
     private void loadCurrentData() {
-        displayNameEdit.setText(dbHelper.getDisplayName(userId));
-        currentAvatarUri = dbHelper.getAvatarUri(userId);
-        if (!TextUtils.isEmpty(currentAvatarUri)) {
-            loadAvatar(currentAvatarUri);
-        }
+        AppExecutors.io().execute(() -> {
+            String displayName = dbHelper.getDisplayName(userId);
+            String avatarUri = dbHelper.getAvatarUri(userId);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                displayNameEdit.setText(displayName);
+                currentAvatarUri = avatarUri;
+                originalAvatarUri = avatarUri;
+                if (!TextUtils.isEmpty(avatarUri)) {
+                    loadAvatar(avatarUri);
+                }
+            });
+        });
     }
 
     private void loadAvatar(String uri) {
+        if (TextUtils.isEmpty(uri)) {
+            avatarImage.setImageDrawable(null);
+            avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
+            return;
+        }
         if (uri.startsWith("default_")) {
-            // 默认头像（纯色）
             int index = Integer.parseInt(uri.substring(8));
             if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
                 avatarImage.setImageDrawable(null);
                 avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
             }
-        } else {
-            // 用户上传的头像
-            ImageLoader.load(avatarImage, uri, 200);
+            return;
         }
+        avatarImage.setBackground(null);
+        ImageLoader.load(avatarImage, uri, 200);
     }
 
     private void showDefaultAvatarPicker() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        android.view.LayoutInflater inflater = getLayoutInflater();
-        android.view.View dialogView = inflater.inflate(R.layout.dialog_avatar_picker, null);
+        android.view.View dialogView = getLayoutInflater().inflate(R.layout.dialog_avatar_picker, null);
         GridLayout gridLayout = dialogView.findViewById(R.id.avatarGrid);
 
-        // 动态添加8个默认头像
         for (int i = 0; i < DEFAULT_AVATAR_COLORS.length; i++) {
             ImageView avatarView = new ImageView(this);
             int size = (int) (60 * getResources().getDisplayMetrics().density);
@@ -136,47 +143,41 @@ public class EditProfileActivity extends Activity {
                 loadAvatar(currentAvatarUri);
                 ((AlertDialog) v.getTag()).dismiss();
             });
-
             gridLayout.addView(avatarView);
         }
 
         AlertDialog dialog = builder.setView(dialogView)
                 .setNegativeButton("取消", null)
                 .create();
-
-        // 为每个头像设置 dialog 引用
         for (int i = 0; i < gridLayout.getChildCount(); i++) {
             gridLayout.getChildAt(i).setTag(dialog);
         }
-
         dialog.show();
     }
 
     private void takePhoto() {
-        // 检查相机权限（Android 6.0+）
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{android.Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
-                return;
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(android.Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+            return;
         }
 
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            try {
-                File photoFile = ImageUtils.createImageFile(this);
-                photoUri = FileProvider.getUriForFile(this,
-                        getPackageName() + ".fileprovider", photoFile);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
-                takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                        | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                takePictureIntent.setClipData(ClipData.newRawUri("avatar_photo", photoUri));
-                startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
-            } catch (IOException e) {
-                Toast.makeText(this, "无法创建照片文件", Toast.LENGTH_SHORT).show();
-            }
-        } else {
+        if (takePictureIntent.resolveActivity(getPackageManager()) == null) {
             Toast.makeText(this, "没有可用的相机应用", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            File photoFile = ImageUtils.createImageFile(this);
+            photoUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", photoFile);
+            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+            takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            takePictureIntent.setClipData(ClipData.newRawUri("avatar_photo", photoUri));
+            startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+        } catch (IOException e) {
+            Toast.makeText(this, "无法创建照片文件", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -191,18 +192,16 @@ public class EditProfileActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode == RESULT_OK) {
-            if (requestCode == REQUEST_TAKE_PHOTO) {
-                if (photoUri != null) {
-                    currentAvatarUri = photoUri.toString();
-                    loadAvatar(currentAvatarUri);
-                }
-            } else if (requestCode == REQUEST_PICK_PHOTO && data != null) {
-                Uri selectedImage = data.getData();
-                if (selectedImage != null) {
-                    importPickedAvatar(selectedImage);
-                }
+        if (resultCode != RESULT_OK) {
+            return;
+        }
+        if (requestCode == REQUEST_TAKE_PHOTO) {
+            if (photoUri != null) {
+                currentAvatarUri = photoUri.toString();
+                loadAvatar(currentAvatarUri);
             }
+        } else if (requestCode == REQUEST_PICK_PHOTO && data != null && data.getData() != null) {
+            importPickedAvatar(data.getData());
         }
     }
 
@@ -218,25 +217,32 @@ public class EditProfileActivity extends Activity {
     }
 
     private void copyAvatarToPrivateStorage(Uri sourceUri) {
-        try {
-            File dest = ImageUtils.createImageFile(this);
-            try (InputStream in = getContentResolver().openInputStream(sourceUri);
-                 OutputStream out = new java.io.FileOutputStream(dest)) {
-                if (in == null) {
-                    throw new IOException("无法读取头像文件");
+        AppExecutors.io().execute(() -> {
+            try {
+                File dest = ImageUtils.createImageFile(this);
+                try (InputStream in = getContentResolver().openInputStream(sourceUri);
+                     OutputStream out = new java.io.FileOutputStream(dest)) {
+                    if (in == null) {
+                        throw new IOException("无法读取头像文件");
+                    }
+                    byte[] buffer = new byte[8192];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, read);
+                    }
                 }
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, read);
-                }
+                Uri stored = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", dest);
+                AppExecutors.main().execute(() -> {
+                    if (!isFinishing()) {
+                        currentAvatarUri = stored.toString();
+                        loadAvatar(currentAvatarUri);
+                    }
+                });
+            } catch (IOException e) {
+                AppExecutors.main().execute(() ->
+                        Toast.makeText(this, "头像保存失败", Toast.LENGTH_SHORT).show());
             }
-            Uri stored = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", dest);
-            currentAvatarUri = stored.toString();
-            loadAvatar(currentAvatarUri);
-        } catch (IOException e) {
-            Toast.makeText(this, "头像保存失败", Toast.LENGTH_SHORT).show();
-        }
+        });
     }
 
     @Override
@@ -257,21 +263,10 @@ public class EditProfileActivity extends Activity {
         String newPassword = newPasswordEdit.getText().toString();
         String confirmPassword = confirmPasswordEdit.getText().toString();
 
-        // 验证显示名称
         if (TextUtils.isEmpty(displayName)) {
             Toast.makeText(this, "请输入显示名称", Toast.LENGTH_SHORT).show();
             return;
         }
-
-        // 更新显示名称
-        dbHelper.setDisplayName(userId, displayName);
-
-        // 更新头像
-        if (!TextUtils.isEmpty(currentAvatarUri)) {
-            dbHelper.setAvatarUri(userId, currentAvatarUri);
-        }
-
-        // 修改密码（如果填写了）
         if (!TextUtils.isEmpty(oldPassword) || !TextUtils.isEmpty(newPassword)) {
             if (TextUtils.isEmpty(oldPassword)) {
                 Toast.makeText(this, "请输入原密码", Toast.LENGTH_SHORT).show();
@@ -285,24 +280,34 @@ public class EditProfileActivity extends Activity {
                 Toast.makeText(this, "两次输入的新密码不一致", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            // 验证原密码
-            if (dbHelper.login(username, oldPassword) == DayMarkDbHelper.NO_USER) {
-                Toast.makeText(this, "原密码不正确", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 修改密码
-            if (dbHelper.changePassword(userId, oldPassword, newPassword)) {
-                Toast.makeText(this, "密码修改成功", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "密码修改失败", Toast.LENGTH_SHORT).show();
-                return;
-            }
         }
 
-        Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
-        setResult(RESULT_OK);
-        finish();
+        final String finalAvatarUri = currentAvatarUri;
+        final String previousAvatarUri = originalAvatarUri;
+        AppExecutors.io().execute(() -> {
+            int result = dbHelper.updateProfile(userId, displayName, finalAvatarUri, oldPassword, newPassword);
+            if (result == DayMarkDbHelper.PROFILE_UPDATE_OK
+                    && !TextUtils.isEmpty(previousAvatarUri)
+                    && !TextUtils.equals(previousAvatarUri, finalAvatarUri)) {
+                ImageUtils.deleteOwnedImage(this, previousAvatarUri);
+            }
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (result == DayMarkDbHelper.PROFILE_UPDATE_OK) {
+                    originalAvatarUri = finalAvatarUri;
+                    Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK);
+                    finish();
+                } else if (result == DayMarkDbHelper.PROFILE_UPDATE_OLD_PASSWORD_REQUIRED) {
+                    Toast.makeText(this, "请输入原密码", Toast.LENGTH_SHORT).show();
+                } else if (result == DayMarkDbHelper.PROFILE_UPDATE_OLD_PASSWORD_INCORRECT) {
+                    Toast.makeText(this, "原密码不正确", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
     }
 }
