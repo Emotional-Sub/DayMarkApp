@@ -267,14 +267,59 @@
                     android:layout_marginTop="12dp"
                     android:clickable="true" />
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_gravity="end"
                     android:layout_marginTop="8dp"
-                    android:text="少          多"
-                    android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
-                    android:textColor="@color/onSurfaceVariant" />
+                    android:gravity="end|center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="少"
+                        android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
+                        android:textColor="@color/onSurfaceVariant" />
+
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_heatmap_level_0" />
+
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_heatmap_level_1" />
+
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_heatmap_level_2" />
+
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_heatmap_level_3" />
+
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:layout_marginStart="4dp"
+                        android:background="@drawable/bg_heatmap_level_4" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="多"
+                        android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
+                        android:textColor="@color/onSurfaceVariant" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
