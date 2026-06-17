@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.DayMark" parent="@style/Theme.DayMark.Base">
+    <style name="Theme.DayMark" parent="@style/ThemeDayMarkBase">
         <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

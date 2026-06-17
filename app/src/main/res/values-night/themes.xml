@@ -1,6 +1,6 @@
 <resources>
     <!-- Main Theme - Material 3 Dark -->
-    <style name="Theme.DayMark.Base" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="ThemeDayMarkBase" parent="Theme.Material3.Dark.NoActionBar">
         <!-- Primary -->
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/onPrimary</item>
@@ -54,5 +54,5 @@
         <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.DayMark.LargeComponent</item>
     </style>
 
-    <style name="Theme.DayMark" parent="@style/Theme.DayMark.Base" />
+    <style name="Theme.DayMark" parent="@style/ThemeDayMarkBase" />
 </resources>

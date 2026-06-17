@@ -184,11 +184,18 @@ public class ProfileActivity extends Activity {
             avatarImage.setImageResource(R.drawable.ic_profile_24);
             avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
         } else if (avatarUri.startsWith("default_")) {
-            int index = Integer.parseInt(avatarUri.substring(8));
-            if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
-                avatarImage.setImageDrawable(null);
-                avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
+            try {
+                int index = Integer.parseInt(avatarUri.substring(8));
+                if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
+                    avatarImage.setImageDrawable(null);
+                    avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
+                    return;
+                }
+            } catch (NumberFormatException ignored) {
+                // Fall through to the default avatar if the stored value is malformed.
             }
+            avatarImage.setImageResource(R.drawable.ic_profile_24);
+            avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
         } else {
             avatarImage.setBackground(null);
             ImageLoader.load(avatarImage, avatarUri, 200);

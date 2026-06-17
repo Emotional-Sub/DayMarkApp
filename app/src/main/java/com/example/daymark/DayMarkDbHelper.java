@@ -27,7 +27,7 @@ import java.util.Set;
 
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
-    private static final int DB_VERSION = 7;
+    private static final int DB_VERSION = 8;
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
@@ -57,7 +57,8 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 "username TEXT UNIQUE NOT NULL," +
                 "password TEXT NOT NULL," +
                 "display_name TEXT," +
-                "salt TEXT)");
+                "salt TEXT," +
+                "avatar_uri TEXT)");
         db.execSQL("CREATE TABLE habits (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "user_id INTEGER NOT NULL DEFAULT 1," +
@@ -132,6 +133,12 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
         // v7 added avatar_uri for user profile pictures.
         if (oldVersion < 7) {
+            addColumnQuietly(db, "users", "avatar_uri TEXT");
+            Logger.dbSuccess("Added avatar_uri column");
+        }
+        // v8 keeps the users schema consistent for installs created when DB v7's onCreate()
+        // accidentally omitted avatar_uri even though the rest of the app already queried it.
+        if (oldVersion < 8) {
             addColumnQuietly(db, "users", "avatar_uri TEXT");
             Logger.dbSuccess("Added avatar_uri column");
         }
