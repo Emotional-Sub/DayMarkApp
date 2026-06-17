@@ -8,6 +8,7 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.widget.EditText;
+import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -51,7 +52,7 @@ public class ProfileActivity extends Activity {
     private TextView maxStreakText;
     private TextView categoryStatsText;
     private HeatmapView heatmapView;
-    private LinearLayout achievementContainer;
+    private GridLayout achievementContainer;
 
     // 默认头像颜色
     private static final int[] DEFAULT_AVATAR_COLORS = {
@@ -238,7 +239,7 @@ public class ProfileActivity extends Activity {
         return builder.toString();
     }
 
-    /** Build one row per achievement; unlocked rows use the brand color, locked ones are muted. */
+    /** Build a two-column badge wall; each unlocked badge gets its own palette and emblem style. */
     private void renderAchievements(List<Achievement> achievements) {
         achievementContainer.removeAllViews();
         TextView noAchievementsText = findViewById(R.id.noAchievementsText);
@@ -260,29 +261,18 @@ public class ProfileActivity extends Activity {
         noAchievementsText.setVisibility(android.view.View.GONE);
 
         float density = getResources().getDisplayMetrics().density;
-        int rowPaddingV = (int) (8 * density);
-        int unlockedColor = getColor(R.color.primary);
+        int gap = (int) (10 * density);
 
-        for (Achievement achievement : unlockedAchievements) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(0, rowPaddingV, 0, rowPaddingV);
-
-            TextView title = new TextView(this);
-            title.setText("🏅 " + achievement.title);
-            title.setTextColor(unlockedColor);
-            title.setTextSize(15f);
-            title.setGravity(Gravity.START);
-            title.getPaint().setFakeBoldText(true);
-
-            TextView desc = new TextView(this);
-            desc.setText(achievement.description);
-            desc.setTextColor(getColor(R.color.onSurfaceVariant));
-            desc.setTextSize(13f);
-
-            row.addView(title);
-            row.addView(desc);
-            achievementContainer.addView(row);
+        for (int i = 0; i < unlockedAchievements.size(); i++) {
+            Achievement achievement = unlockedAchievements.get(i);
+            MaterialCardView card = AchievementBadgeRenderer.create(this, achievement, i, false);
+            GridLayout.LayoutParams cardParams = new GridLayout.LayoutParams();
+            cardParams.width = 0;
+            cardParams.height = GridLayout.LayoutParams.WRAP_CONTENT;
+            cardParams.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+            cardParams.setMargins(i % 2 == 0 ? 0 : gap / 2, 0, i % 2 == 0 ? gap / 2 : 0, gap);
+            card.setLayoutParams(cardParams);
+            achievementContainer.addView(card);
         }
     }
 
