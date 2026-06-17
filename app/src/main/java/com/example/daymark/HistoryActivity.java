@@ -40,6 +40,7 @@ public class HistoryActivity extends Activity {
     private final List<Long> filterHabitIds = new ArrayList<>();
     private boolean spinnerInitialized;
     private boolean entrancePlayed;
+    private boolean listAnimationPlayed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,6 +93,16 @@ public class HistoryActivity extends Activity {
         super.onResume();
         playEntranceIfNeeded();
         loadData();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        resetAnimatedView(findViewById(R.id.historyTitleText));
+        resetAnimatedView(summaryText);
+        resetAnimatedView(habitFilterSpinner);
+        resetAnimatedView(recordList);
+        listAnimationPlayed = false;
     }
 
     @Override
@@ -157,7 +168,10 @@ public class HistoryActivity extends Activity {
             }
         }
         adapter.submitList(shown);
-        recordList.scheduleLayoutAnimation();
+        if (!listAnimationPlayed) {
+            recordList.scheduleLayoutAnimation();
+            listAnimationPlayed = true;
+        }
         summaryText.setText(String.format(Locale.CHINA, "共 %d 条打卡记录", shown.size()));
     }
 
@@ -197,6 +211,15 @@ public class HistoryActivity extends Activity {
                 .setStartDelay(delayMs)
                 .setDuration(320L)
                 .start();
+    }
+
+    private void resetAnimatedView(View view) {
+        if (view == null) {
+            return;
+        }
+        view.animate().cancel();
+        view.setAlpha(1f);
+        view.setTranslationY(0f);
     }
 
     private class RecordAdapter extends BaseAdapter {

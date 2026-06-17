@@ -51,6 +51,11 @@ public class ReminderCenterActivity extends Activity {
         loadReminders();
     }
 
+    @Override
+    public void onBackPressed() {
+        finish();
+    }
+
     private void loadReminders() {
         AppExecutors.io().execute(() -> {
             List<Habit> reminders = dbHelper.getHabitsWithReminder(userId);
@@ -79,9 +84,12 @@ public class ReminderCenterActivity extends Activity {
                 .setPositiveButton("关闭", (dialog, which) -> {
                     AppExecutors.io().execute(() -> {
                         boolean ok = dbHelper.updateReminderTime(habit.id, "");
-                        ReminderReceiver.cancel(this, habit.id);
                         AppExecutors.main().execute(() -> {
+                            if (isFinishing()) {
+                                return;
+                            }
                             if (ok) {
+                                ReminderReceiver.cancel(this, habit.id);
                                 Toast.makeText(this, "提醒已关闭", Toast.LENGTH_SHORT).show();
                                 loadReminders();
                             } else {
