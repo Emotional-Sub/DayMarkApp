@@ -84,7 +84,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:text="分类打卡占比"
+            android:text="分类占比"
             android:textColor="@color/ink"
             android:textSize="20sp"
             android:textStyle="bold" />

@@ -18,7 +18,6 @@
             android:text="编辑资料"
             android:textAppearance="@style/TextAppearance.DayMark.Headline.Medium" />
 
-        <!-- 头像选择 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -36,9 +35,9 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
                     android:text="头像"
-                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium"
-                    android:layout_marginBottom="12dp" />
+                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                 <ImageView
                     android:id="@+id/editAvatarImage"
@@ -94,7 +93,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 显示名称 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -111,9 +109,9 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
                     android:text="显示名称"
-                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium"
-                    android:layout_marginBottom="12dp" />
+                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
@@ -135,7 +133,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 修改密码 -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -152,9 +149,9 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
                     android:text="修改密码"
-                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium"
-                    android:layout_marginBottom="12dp" />
+                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:layout_width="match_parent"
@@ -217,7 +214,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 操作按钮 -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveButton"
             android:layout_width="match_parent"

@@ -6,7 +6,6 @@
     android:background="@color/background"
     android:orientation="vertical">
 
-    <!-- 标题栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -31,7 +30,6 @@
             app:cornerRadius="12dp" />
     </LinearLayout>
 
-    <!-- 统计信息 -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -51,7 +49,7 @@
                 android:id="@+id/unlockedCountText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="已获得: 0"
+                android:text="已点亮 0"
                 android:textAppearance="@style/TextAppearance.DayMark.Body.Large"
                 android:textColor="@color/primary" />
 
@@ -73,7 +71,6 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- 勋章列表 -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"

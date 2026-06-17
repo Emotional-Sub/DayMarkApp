@@ -110,12 +110,16 @@ public class EditProfileActivity extends Activity {
             return;
         }
         if (uri.startsWith("default_")) {
-            int index = Integer.parseInt(uri.substring(8));
-            if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
-                avatarImage.setImageDrawable(null);
-                avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
+            try {
+                int index = Integer.parseInt(uri.substring(8));
+                if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
+                    avatarImage.setImageDrawable(null);
+                    avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
+                }
+                return;
+            } catch (NumberFormatException ignored) {
+                // Fall back to the default avatar below.
             }
-            return;
         }
         avatarImage.setBackground(null);
         ImageLoader.load(avatarImage, uri, 200);

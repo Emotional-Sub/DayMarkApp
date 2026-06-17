@@ -15,10 +15,9 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="个人主页"
+            android:text="个人中心"
             android:textAppearance="@style/TextAppearance.DayMark.Headline.Medium" />
 
-        <!-- Account info card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -35,11 +34,10 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
                     android:text="个人信息"
-                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium"
-                    android:layout_marginBottom="16dp" />
+                    android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
-                <!-- 头像 -->
                 <ImageView
                     android:id="@+id/profileAvatarImage"
                     android:layout_width="80dp"
@@ -82,7 +80,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Statistics Grid - 2x2 -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -96,7 +93,6 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal">
 
-            <!-- 事件总数 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -130,7 +126,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 今日完成 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -171,7 +166,6 @@
             android:layout_marginTop="12dp"
             android:orientation="horizontal">
 
-            <!-- 累计打卡 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -205,7 +199,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 最高连续 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -240,7 +233,6 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <!-- Yearly heatmap card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -323,7 +315,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Category stats card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/categoryStatsCard"
             android:layout_width="match_parent"
@@ -371,7 +362,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Achievements card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/achievementsCard"
             android:layout_width="match_parent"
@@ -430,7 +420,6 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Account settings -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
