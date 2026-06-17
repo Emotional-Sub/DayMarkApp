@@ -3,6 +3,7 @@ package com.example.daymark;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.GridLayout;
@@ -22,6 +23,7 @@ public class ProfileActivity extends Activity {
     private static final int HEATMAP_WEEKS = 27;
     private static final int REQUEST_EDIT_PROFILE = 100;
     private static final int REQUEST_IMPORT_FILE = 101;
+    private static final int REQUEST_EXPORT_FILE = 102;
 
     private static final int[] DEFAULT_AVATAR_COLORS = {
             0xFF4CAF50, 0xFF2196F3, 0xFFFF9800, 0xFFE91E63,
@@ -70,6 +72,7 @@ public class ProfileActivity extends Activity {
         MaterialCardView categoryStatsCard = findViewById(R.id.categoryStatsCard);
         MaterialCardView achievementsCard = findViewById(R.id.achievementsCard);
         MaterialButton editProfileButton = findViewById(R.id.editProfileButton);
+        MaterialButton exportBackupButton = findViewById(R.id.exportBackupButton);
         MaterialButton importBackupButton = findViewById(R.id.importBackupButton);
         MaterialButton logoutButton = findViewById(R.id.logoutButton);
         MaterialButton deleteAccountButton = findViewById(R.id.deleteAccountButton);
@@ -79,6 +82,7 @@ public class ProfileActivity extends Activity {
         editProfileButton.setOnClickListener(v -> goToEditProfile());
         categoryStatsCard.setOnClickListener(v -> goToStats());
         achievementsCard.setOnClickListener(v -> goToAchievements());
+        exportBackupButton.setOnClickListener(v -> exportBackup());
         importBackupButton.setOnClickListener(v -> showImportDialog());
         logoutButton.setOnClickListener(v -> goToLogin());
         deleteAccountButton.setOnClickListener(v -> confirmDeleteAccount());
@@ -192,7 +196,7 @@ public class ProfileActivity extends Activity {
                     return;
                 }
             } catch (NumberFormatException ignored) {
-                // Fall through to the default avatar if the stored value is malformed.
+                // Fall back to the default avatar below.
             }
             avatarImage.setImageResource(R.drawable.ic_profile_24);
             avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
@@ -307,7 +311,7 @@ public class ProfileActivity extends Activity {
     private void showImportDialog() {
         new AlertDialog.Builder(this)
                 .setTitle("导入数据")
-                .setMessage("警告：导入将会覆盖当前所有数据。\n\n请确保已备份当前数据，导入操作不可撤销。")
+                .setMessage("警告：导入将覆盖当前所有数据。\n\n请确保已备份当前数据，导入操作不可撤销。")
                 .setPositiveButton("选择备份文件", (dialog, which) -> selectImportFile())
                 .setNegativeButton("取消", null)
                 .show();
@@ -324,7 +328,19 @@ public class ProfileActivity extends Activity {
         }
     }
 
-    private void importFromUri(android.net.Uri uri) {
+    private void exportBackup() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        intent.putExtra(Intent.EXTRA_TITLE, "daymark_backup_" + System.currentTimeMillis() + ".json");
+        try {
+            startActivityForResult(intent, REQUEST_EXPORT_FILE);
+        } catch (android.content.ActivityNotFoundException e) {
+            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void importFromUri(Uri uri) {
         AppExecutors.io().execute(() -> {
             try {
                 java.io.File tempFile = new java.io.File(getCacheDir(), "import_temp.json");
@@ -365,15 +381,45 @@ public class ProfileActivity extends Activity {
         });
     }
 
+    private void exportToUri(Uri uri) {
+        AppExecutors.io().execute(() -> {
+            boolean success = false;
+            try (java.io.OutputStream outputStream = getContentResolver().openOutputStream(uri, "wt")) {
+                if (outputStream == null) {
+                    throw new java.io.IOException("无法写入备份文件");
+                }
+                success = dbHelper.exportBackupToStream(outputStream);
+            } catch (Exception e) {
+                Logger.e("Export failed", e);
+            }
+            final boolean exportSuccess = success;
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (exportSuccess) {
+                    Toast.makeText(this, "备份导出成功", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "备份导出失败", Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_EDIT_PROFILE && resultCode == RESULT_OK) {
             refresh();
         } else if (requestCode == REQUEST_IMPORT_FILE && resultCode == RESULT_OK && data != null) {
-            android.net.Uri uri = data.getData();
+            Uri uri = data.getData();
             if (uri != null) {
                 importFromUri(uri);
+            }
+        } else if (requestCode == REQUEST_EXPORT_FILE && resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri != null) {
+                exportToUri(uri);
             }
         }
     }

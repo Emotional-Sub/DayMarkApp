@@ -440,6 +440,19 @@
             android:textColor="@color/onSurfaceVariant" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/exportBackupButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="导出备份"
+            android:textSize="15sp"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_save"
+            app:iconGravity="textStart"
+            app:iconSize="20dp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/importBackupButton"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"

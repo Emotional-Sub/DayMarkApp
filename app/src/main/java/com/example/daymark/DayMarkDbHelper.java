@@ -16,6 +16,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -164,85 +165,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      */
     private boolean backupDatabaseToJson(SQLiteDatabase db) {
         try {
-            Logger.i("Starting database backup to JSON");
-            JSONObject backup = new JSONObject();
-            backup.put("backup_version", 1);
-            backup.put("db_version", DB_VERSION);
-            backup.put("timestamp", System.currentTimeMillis());
-
-            // Backup users table
-            JSONArray users = new JSONArray();
-            try (Cursor cursor = db.query("users", null, null, null, null, null, null)) {
-                while (cursor.moveToNext()) {
-                    JSONObject user = new JSONObject();
-                    user.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-                    user.put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")));
-                    user.put("password", cursor.getString(cursor.getColumnIndexOrThrow("password")));
-                    int saltIdx = cursor.getColumnIndex("salt");
-                    if (saltIdx >= 0 && !cursor.isNull(saltIdx)) {
-                        user.put("salt", cursor.getString(saltIdx));
-                    }
-                    int displayNameIdx = cursor.getColumnIndex("display_name");
-                    if (displayNameIdx >= 0 && !cursor.isNull(displayNameIdx)) {
-                        user.put("display_name", cursor.getString(displayNameIdx));
-                    }
-                    int avatarUriIdx = cursor.getColumnIndex("avatar_uri");
-                    if (avatarUriIdx >= 0 && !cursor.isNull(avatarUriIdx)) {
-                        user.put("avatar_uri", cursor.getString(avatarUriIdx));
-                    }
-                    users.put(user);
-                }
-            }
-            backup.put("users", users);
-
-            // Backup habits table
-            JSONArray habits = new JSONArray();
-            try (Cursor cursor = db.query("habits", null, null, null, null, null, null)) {
-                while (cursor.moveToNext()) {
-                    JSONObject habit = new JSONObject();
-                    habit.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-                    int userIdIdx = cursor.getColumnIndex("user_id");
-                    if (userIdIdx >= 0) {
-                        habit.put("user_id", cursor.getLong(userIdIdx));
-                    }
-                    habit.put("title", cursor.getString(cursor.getColumnIndexOrThrow("title")));
-                    habit.put("content", cursor.getString(cursor.getColumnIndexOrThrow("content")));
-                    habit.put("time_text", cursor.getString(cursor.getColumnIndexOrThrow("time_text")));
-                    habit.put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")));
-                    habit.put("check_count", cursor.getInt(cursor.getColumnIndexOrThrow("check_count")));
-                    habit.put("last_check_at", cursor.getLong(cursor.getColumnIndexOrThrow("last_check_at")));
-                    habit.put("created_at", cursor.getLong(cursor.getColumnIndexOrThrow("created_at")));
-
-                    // Optional columns
-                    copyColumnIfExists(cursor, habit, "image_uri");
-                    copyColumnIfExists(cursor, habit, "reminder_time");
-                    copyColumnIfExists(cursor, habit, "frequency_type");
-                    copyColumnIfExists(cursor, habit, "frequency_days");
-                    copyColumnIfExists(cursor, habit, "frequency_count");
-                    copyColumnIfExists(cursor, habit, "target_days");
-                    copyColumnIfExists(cursor, habit, "sort_order");
-
-                    habits.put(habit);
-                }
-            }
-            backup.put("habits", habits);
-
-            // Backup check_records table
-            JSONArray records = new JSONArray();
-            try (Cursor cursor = db.query("check_records", null, null, null, null, null, null)) {
-                while (cursor.moveToNext()) {
-                    JSONObject record = new JSONObject();
-                    record.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-                    record.put("habit_id", cursor.getLong(cursor.getColumnIndexOrThrow("habit_id")));
-                    record.put("checked_at", cursor.getLong(cursor.getColumnIndexOrThrow("checked_at")));
-                    int noteIdx = cursor.getColumnIndex("note");
-                    if (noteIdx >= 0 && !cursor.isNull(noteIdx)) {
-                        record.put("note", cursor.getString(noteIdx));
-                    }
-                    records.put(record);
-                }
-            }
-            backup.put("check_records", records);
+            JSONObject backup = buildBackupJson(db);
 
             // Write to file
             File backupDir = new File(context.getFilesDir(), "db_backups");
@@ -255,16 +178,118 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             File backupFile = new File(backupDir, filename);
 
             try (FileOutputStream fos = new FileOutputStream(backupFile)) {
-                fos.write(backup.toString(2).getBytes(StandardCharsets.UTF_8));
+                writeBackupJson(backup, fos);
             }
 
             Logger.i("Database backup saved to: " + backupFile.getAbsolutePath());
-            Logger.i("Backup contains: " + users.length() + " users, " +
-                    habits.length() + " habits, " + records.length() + " records");
+            Logger.i("Backup contains: " + backup.getJSONArray("users").length() + " users, " +
+                    backup.getJSONArray("habits").length() + " habits, " +
+                    backup.getJSONArray("check_records").length() + " records");
             return true;
 
         } catch (Exception e) {
             Logger.e("Database backup failed", e);
+            return false;
+        }
+    }
+
+    private JSONObject buildBackupJson(SQLiteDatabase db) throws Exception {
+        Logger.i("Starting database backup to JSON");
+        JSONObject backup = new JSONObject();
+        backup.put("backup_version", 1);
+        backup.put("db_version", DB_VERSION);
+        backup.put("timestamp", System.currentTimeMillis());
+
+        // Backup users table
+        JSONArray users = new JSONArray();
+        try (Cursor cursor = db.query("users", null, null, null, null, null, null)) {
+            while (cursor.moveToNext()) {
+                JSONObject user = new JSONObject();
+                user.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                user.put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")));
+                user.put("password", cursor.getString(cursor.getColumnIndexOrThrow("password")));
+                int saltIdx = cursor.getColumnIndex("salt");
+                if (saltIdx >= 0 && !cursor.isNull(saltIdx)) {
+                    user.put("salt", cursor.getString(saltIdx));
+                }
+                int displayNameIdx = cursor.getColumnIndex("display_name");
+                if (displayNameIdx >= 0 && !cursor.isNull(displayNameIdx)) {
+                    user.put("display_name", cursor.getString(displayNameIdx));
+                }
+                int avatarUriIdx = cursor.getColumnIndex("avatar_uri");
+                if (avatarUriIdx >= 0 && !cursor.isNull(avatarUriIdx)) {
+                    user.put("avatar_uri", cursor.getString(avatarUriIdx));
+                }
+                users.put(user);
+            }
+        }
+        backup.put("users", users);
+
+        // Backup habits table
+        JSONArray habits = new JSONArray();
+        try (Cursor cursor = db.query("habits", null, null, null, null, null, null)) {
+            while (cursor.moveToNext()) {
+                JSONObject habit = new JSONObject();
+                habit.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                int userIdIdx = cursor.getColumnIndex("user_id");
+                if (userIdIdx >= 0) {
+                    habit.put("user_id", cursor.getLong(userIdIdx));
+                }
+                habit.put("title", cursor.getString(cursor.getColumnIndexOrThrow("title")));
+                habit.put("content", cursor.getString(cursor.getColumnIndexOrThrow("content")));
+                habit.put("time_text", cursor.getString(cursor.getColumnIndexOrThrow("time_text")));
+                habit.put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")));
+                habit.put("check_count", cursor.getInt(cursor.getColumnIndexOrThrow("check_count")));
+                habit.put("last_check_at", cursor.getLong(cursor.getColumnIndexOrThrow("last_check_at")));
+                habit.put("created_at", cursor.getLong(cursor.getColumnIndexOrThrow("created_at")));
+
+                // Optional columns
+                copyColumnIfExists(cursor, habit, "image_uri");
+                copyColumnIfExists(cursor, habit, "reminder_time");
+                copyColumnIfExists(cursor, habit, "frequency_type");
+                copyColumnIfExists(cursor, habit, "frequency_days");
+                copyColumnIfExists(cursor, habit, "frequency_count");
+                copyColumnIfExists(cursor, habit, "target_days");
+                copyColumnIfExists(cursor, habit, "sort_order");
+
+                habits.put(habit);
+            }
+        }
+        backup.put("habits", habits);
+
+        // Backup check_records table
+        JSONArray records = new JSONArray();
+        try (Cursor cursor = db.query("check_records", null, null, null, null, null, null)) {
+            while (cursor.moveToNext()) {
+                JSONObject record = new JSONObject();
+                record.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
+                record.put("habit_id", cursor.getLong(cursor.getColumnIndexOrThrow("habit_id")));
+                record.put("checked_at", cursor.getLong(cursor.getColumnIndexOrThrow("checked_at")));
+                int noteIdx = cursor.getColumnIndex("note");
+                if (noteIdx >= 0 && !cursor.isNull(noteIdx)) {
+                    record.put("note", cursor.getString(noteIdx));
+                }
+                records.put(record);
+            }
+        }
+        backup.put("check_records", records);
+        return backup;
+    }
+
+    private void writeBackupJson(JSONObject backup, OutputStream outputStream) throws Exception {
+        outputStream.write(backup.toString(2).getBytes(StandardCharsets.UTF_8));
+        outputStream.flush();
+    }
+
+    @WorkerThread
+    public boolean exportBackupToStream(OutputStream outputStream) {
+        try {
+            JSONObject backup = buildBackupJson(getReadableDatabase());
+            writeBackupJson(backup, outputStream);
+            Logger.i("Database backup exported to destination stream");
+            return true;
+        } catch (Exception e) {
+            Logger.e("Database export failed", e);
             return false;
         }
     }
