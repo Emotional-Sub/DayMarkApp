@@ -4,4 +4,8 @@
     <files-path
         name="habit_photos"
         path="habit_photos/" />
+    <!-- External files dir for avatar photos from camera -->
+    <external-files-path
+        name="avatar_pictures"
+        path="Pictures/" />
 </paths>
