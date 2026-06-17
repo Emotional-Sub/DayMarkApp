@@ -149,7 +149,7 @@
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="历史"
+            android:text="时间线"
             android:textSize="13sp"
             app:cornerRadius="12dp"
             app:icon="@drawable/ic_history_24"
@@ -174,6 +174,20 @@
             android:textSize="13sp"
             app:cornerRadius="12dp"
             app:icon="@android:drawable/ic_menu_agenda"
+            app:iconGravity="textStart"
+            app:iconSize="18dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/reminderCenterButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:text="提醒"
+            android:textSize="13sp"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_reminder_24"
             app:iconGravity="textStart"
             app:iconSize="18dp" />
 

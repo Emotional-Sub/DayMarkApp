@@ -81,6 +81,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         MaterialButton addButton = findViewById(R.id.addButton);
         MaterialButton accountButton = findViewById(R.id.accountButton);
         MaterialButton templateButton = findViewById(R.id.templateButton);
+        MaterialButton reminderCenterButton = findViewById(R.id.reminderCenterButton);
         MaterialButton calendarButton = findViewById(R.id.calendarButton);
         MaterialButton statsButton = findViewById(R.id.statsButton);
         MaterialButton historyButton = findViewById(R.id.historyButton);
@@ -127,6 +128,11 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         });
         templateButton.setOnClickListener(v -> {
             Intent intent = new Intent(this, TemplateLibraryActivity.class);
+            intent.putExtra("user_id", userId);
+            startActivity(intent);
+        });
+        reminderCenterButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ReminderCenterActivity.class);
             intent.putExtra("user_id", userId);
             startActivity(intent);
         });

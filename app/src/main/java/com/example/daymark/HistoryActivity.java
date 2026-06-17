@@ -7,6 +7,7 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AnimationUtils;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
@@ -32,11 +33,13 @@ public class HistoryActivity extends Activity {
     private TextView summaryText;
     private RecordAdapter adapter;
     private Spinner habitFilterSpinner;
+    private ListView recordList;
 
     private List<CheckRecord> allRecords = new ArrayList<>();
     /** Spinner positions → habit id; index 0 is the "all events" entry (id = -1). */
     private final List<Long> filterHabitIds = new ArrayList<>();
     private boolean spinnerInitialized;
+    private boolean entrancePlayed;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,10 +54,14 @@ public class HistoryActivity extends Activity {
             return;
         }
 
+        TextView titleText = findViewById(R.id.historyTitleText);
         summaryText = findViewById(R.id.historySummaryText);
         habitFilterSpinner = findViewById(R.id.habitFilterSpinner);
-        ListView recordList = findViewById(R.id.recordList);
+        recordList = findViewById(R.id.recordList);
+        View backButton = findViewById(R.id.backButton);
         recordList.setEmptyView(findViewById(R.id.emptyView));
+        recordList.setLayoutAnimation(AnimationUtils.loadLayoutAnimation(this,
+                R.anim.layout_timeline_in));
 
         adapter = new RecordAdapter();
         recordList.setAdapter(adapter);
@@ -70,13 +77,30 @@ public class HistoryActivity extends Activity {
             }
         });
 
-        findViewById(R.id.backButton).setOnClickListener(v -> finish());
+        backButton.bringToFront();
+        backButton.setOnClickListener(v -> closePage());
+        prepareEntrance(titleText, 20f, 0L);
+        prepareEntrance(summaryText, 20f, 60L);
+        prepareEntrance(habitFilterSpinner, 20f, 120L);
+        prepareEntrance(recordList, 28f, 180L);
+        backButton.setAlpha(1f);
+        backButton.setTranslationY(0f);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        playEntranceIfNeeded();
         loadData();
+    }
+
+    @Override
+    public void onBackPressed() {
+        closePage();
+    }
+
+    private void closePage() {
+        finish();
     }
 
     private void loadData() {
@@ -133,7 +157,46 @@ public class HistoryActivity extends Activity {
             }
         }
         adapter.submitList(shown);
+        recordList.scheduleLayoutAnimation();
         summaryText.setText(String.format(Locale.CHINA, "共 %d 条打卡记录", shown.size()));
+    }
+
+    private void prepareEntrance(View view, float translationDp, long delayMs) {
+        if (view == null) {
+            return;
+        }
+        float density = getResources().getDisplayMetrics().density;
+        view.setAlpha(0f);
+        view.setTranslationY(translationDp * density);
+        view.setTag(delayMs);
+    }
+
+    private void playEntranceIfNeeded() {
+        if (entrancePlayed) {
+            return;
+        }
+        entrancePlayed = true;
+        animateIn(findViewById(R.id.historyTitleText));
+        animateIn(summaryText);
+        animateIn(habitFilterSpinner);
+        animateIn(recordList);
+    }
+
+    private void animateIn(View view) {
+        if (view == null) {
+            return;
+        }
+        long delayMs = 0L;
+        Object tag = view.getTag();
+        if (tag instanceof Long) {
+            delayMs = (Long) tag;
+        }
+        view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setStartDelay(delayMs)
+                .setDuration(320L)
+                .start();
     }
 
     private class RecordAdapter extends BaseAdapter {

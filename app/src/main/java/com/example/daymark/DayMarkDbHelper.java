@@ -478,6 +478,20 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     @WorkerThread
+    public List<Habit> getHabitsWithReminder(long userId) {
+        ArrayList<Habit> habits = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.query("habits", null,
+                "user_id=? AND reminder_time IS NOT NULL AND reminder_time<>''",
+                new String[]{String.valueOf(userId)}, null, null, "reminder_time ASC, id ASC")) {
+            while (cursor.moveToNext()) {
+                habits.add(readHabit(cursor));
+            }
+        }
+        return habits;
+    }
+
+    @WorkerThread
     public List<Habit> searchHabits(String keyword, int filterMode, long userId) {
         String where = null;
         String[] args = null;
@@ -643,6 +657,14 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         values.put("target_days", targetDays);
         return getWritableDatabase().update("habits", values, "id=?",
                 new String[]{String.valueOf(id)}) > 0;
+    }
+
+    @WorkerThread
+    public boolean updateReminderTime(long habitId, String reminderTime) {
+        ContentValues values = new ContentValues();
+        values.put("reminder_time", normalizeReminder(reminderTime));
+        return getWritableDatabase().update("habits", values, "id=?",
+                new String[]{String.valueOf(habitId)}) > 0;
     }
 
     @WorkerThread
