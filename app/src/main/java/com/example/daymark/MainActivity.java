@@ -12,6 +12,8 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
@@ -49,6 +51,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private HabitAdapter adapter;
     private RecyclerView habitList;
     private View emptyView;
+    private View collapsibleHeader;
     private TextView welcomeText;
     private TextView summaryText;
     private TextInputEditText searchEdit;
@@ -61,6 +64,9 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
     private int sortMode = SORT_CUSTOM;
     private long userId = DayMarkDbHelper.NO_USER;
     private String username;
+    private boolean headerCollapsed;
+    private int expandedHeaderHeight = -1;
+    private android.animation.ValueAnimator headerAnimator;
     /** Bumped on every refresh; a background load only applies if it's still the latest request. */
     private int refreshGeneration = 0;
 
@@ -72,6 +78,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         dbHelper = new DayMarkDbHelper(this);
         adapter = new HabitAdapter(this, dbHelper, this);
 
+        collapsibleHeader = findViewById(R.id.collapsibleHeader);
         welcomeText = findViewById(R.id.welcomeText);
         summaryText = findViewById(R.id.summaryText);
         searchEdit = findViewById(R.id.searchEdit);
@@ -109,6 +116,33 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         // Spacing between cards; ListView's dividerHeight has no RecyclerView equivalent.
         int gap = (int) (12 * getResources().getDisplayMetrics().density);
         habitList.addItemDecoration(new SpacingDecoration(gap));
+        collapsibleHeader.post(() -> expandedHeaderHeight = collapsibleHeader.getHeight());
+        collapsibleHeader.addOnLayoutChangeListener((v, left, top, right, bottom,
+                                                     oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (!headerCollapsed && bottom > top) {
+                expandedHeaderHeight = bottom - top;
+            }
+        });
+        habitList.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                if (dy > 8 && !headerCollapsed) {
+                    setHeaderCollapsed(true);
+                } else if (dy < -8 && headerCollapsed && isListAtTop(recyclerView)) {
+                    setHeaderCollapsed(false);
+                }
+            }
+
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                if (headerCollapsed
+                        && newState == RecyclerView.SCROLL_STATE_IDLE
+                        && isListAtTop(recyclerView)) {
+                    setHeaderCollapsed(false);
+                }
+            }
+        });
 
         // Drag-to-reorder; only attached while a manual order makes sense (see updateDragEnabled).
         itemTouchHelper = new ItemTouchHelper(new ReorderCallback());
@@ -294,6 +328,80 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             button.setStrokeWidth((int) (1 * getResources().getDisplayMetrics().density));
             button.setStrokeColor(getColorStateList(R.color.primary));
         }
+    }
+
+    private void setHeaderCollapsed(boolean collapsed) {
+        if (headerCollapsed == collapsed) {
+            return;
+        }
+        headerCollapsed = collapsed;
+        if (collapsibleHeader == null) {
+            return;
+        }
+        if (expandedHeaderHeight <= 0) {
+            collapsibleHeader.post(() -> {
+                expandedHeaderHeight = collapsibleHeader.getHeight();
+                animateCollapsibleHeader(collapsed);
+            });
+            return;
+        }
+        animateCollapsibleHeader(collapsed);
+    }
+
+    private boolean isListAtTop(@NonNull RecyclerView recyclerView) {
+        return !recyclerView.canScrollVertically(-1);
+    }
+
+    private void animateCollapsibleHeader(boolean collapse) {
+        if (headerAnimator != null) {
+            headerAnimator.cancel();
+        }
+        ViewGroup.LayoutParams params = collapsibleHeader.getLayoutParams();
+        int currentHeight = collapsibleHeader.getHeight();
+        final int startHeight = Math.max(0, currentHeight);
+        final int endHeight = collapse ? 0 : expandedHeaderHeight;
+        final float startAlpha = collapsibleHeader.getAlpha();
+        final float endAlpha = collapse ? 0f : 1f;
+        final float startTranslation = collapsibleHeader.getTranslationY();
+        final float endTranslation = collapse ? -dp(10) : 0f;
+
+        collapsibleHeader.setVisibility(View.VISIBLE);
+        headerAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        headerAnimator.setDuration(collapse ? 180L : 240L);
+        headerAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+        headerAnimator.addUpdateListener(animation -> {
+            float fraction = (float) animation.getAnimatedValue();
+            int height = (int) (startHeight + (endHeight - startHeight) * fraction);
+            params.height = height;
+            collapsibleHeader.setLayoutParams(params);
+            collapsibleHeader.setAlpha(startAlpha + (endAlpha - startAlpha) * fraction);
+            collapsibleHeader.setTranslationY(
+                    startTranslation + (endTranslation - startTranslation) * fraction);
+        });
+        headerAnimator.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                headerAnimator = null;
+                if (collapse == headerCollapsed) {
+                    if (collapse) {
+                        params.height = 0;
+                        collapsibleHeader.setLayoutParams(params);
+                        collapsibleHeader.setAlpha(0f);
+                        collapsibleHeader.setTranslationY(-dp(10));
+                    } else {
+                        params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                        collapsibleHeader.setLayoutParams(params);
+                        collapsibleHeader.setAlpha(1f);
+                        collapsibleHeader.setTranslationY(0f);
+                    }
+                }
+            }
+        });
+        headerAnimator.start();
+    }
+
+    private float dp(int value) {
+        return value * getResources().getDisplayMetrics().density;
     }
 
     private void refresh() {
