@@ -60,6 +60,22 @@ public class DateUtils {
         return calendar.getTimeInMillis();
     }
 
+    public static long startOfMonth(long time) {
+        Calendar calendar = calendar(startOfDay(time));
+        calendar.set(Calendar.DAY_OF_MONTH, 1);
+        return calendar.getTimeInMillis();
+    }
+
+    public static long addMonths(long time, int months) {
+        Calendar calendar = calendar(time);
+        calendar.add(Calendar.MONTH, months);
+        return calendar.getTimeInMillis();
+    }
+
+    public static int daysInMonth(long time) {
+        return calendar(time).getActualMaximum(Calendar.DAY_OF_MONTH);
+    }
+
     /**
      * Day-of-week as 1=Monday ... 7=Sunday (ISO order), matching how habit
      * frequency days are stored.
@@ -84,6 +100,10 @@ public class DateUtils {
 
     public static String formatMonthDay(long time) {
         return formatter("MM-dd").format(new Date(time));
+    }
+
+    public static String formatYearMonth(long time) {
+        return formatter("yyyy-MM").format(new Date(time));
     }
 
     /** Month of the given instant as 1=January ... 12=December. */

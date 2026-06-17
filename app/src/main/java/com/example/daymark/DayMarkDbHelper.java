@@ -946,6 +946,10 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      */
     @WorkerThread
     public boolean deleteUser(long userId) {
+        List<Habit> habits = getAllHabits(userId);
+        for (Habit habit : habits) {
+            ReminderReceiver.cancel(context, habit.id);
+        }
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
@@ -1470,16 +1474,95 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     public String buildWeekSummary(long userId) {
-        StringBuilder builder = new StringBuilder("最近 7 天打卡情况\n");
+        StringBuilder builder = new StringBuilder("本周打卡看板\n");
         long today = DateUtils.startOfDay(System.currentTimeMillis());
+        int total = 0;
+        int activeDays = 0;
         for (int i = 6; i >= 0; i--) {
             long day = today - i * DateUtils.DAY_MS;
+            int count = getCheckedHabitCountForDay(day, userId);
+            total += count;
+            if (count > 0) {
+                activeDays++;
+            }
             builder.append(DateUtils.formatMonthDay(day))
                     .append("：")
-                    .append(getCheckedHabitCountForDay(day, userId))
+                    .append(count)
                     .append(" 个事件\n");
         }
+        builder.append("本周合计：").append(total).append(" 个事件，活跃 ")
+                .append(activeDays).append(" 天");
         return builder.toString().trim();
+    }
+
+    public String buildWeekCompare(long userId) {
+        long thisWeek = DateUtils.startOfWeek(System.currentTimeMillis());
+        long lastWeek = thisWeek - 7 * DateUtils.DAY_MS;
+        int thisCount = countRecordsInRange(userId, thisWeek, thisWeek + 7 * DateUtils.DAY_MS);
+        int lastCount = countRecordsInRange(userId, lastWeek, thisWeek);
+        int thisActive = countActiveDaysInRange(userId, thisWeek, thisWeek + 7 * DateUtils.DAY_MS);
+        int lastActive = countActiveDaysInRange(userId, lastWeek, thisWeek);
+        return "周统计对比\n"
+                + "本周打卡记录：" + thisCount + " 次，活跃 " + thisActive + " 天\n"
+                + "上周打卡记录：" + lastCount + " 次，活跃 " + lastActive + " 天\n"
+                + "变化：" + signedDiff(thisCount - lastCount) + " 次";
+    }
+
+    public String buildMonthSummary(long userId) {
+        long monthStart = DateUtils.startOfMonth(System.currentTimeMillis());
+        long nextMonth = DateUtils.addMonths(monthStart, 1);
+        Map<Long, Integer> counts = getDailyCheckCounts(userId, monthStart, nextMonth);
+        int totalRecords = 0;
+        int activeDays = 0;
+        int bestDay = 0;
+        long cursor = monthStart;
+        while (cursor < nextMonth) {
+            Integer count = counts.get(cursor);
+            if (count != null && count > 0) {
+                totalRecords += count;
+                activeDays++;
+                bestDay = Math.max(bestDay, count);
+            }
+            cursor += DateUtils.DAY_MS;
+        }
+        int daysInMonth = DateUtils.daysInMonth(monthStart);
+        double activeRate = daysInMonth == 0 ? 0 : activeDays * 100.0 / daysInMonth;
+        return String.format(Locale.CHINA,
+                "本月打卡看板（%s）\n打卡记录：%d 次\n活跃天数：%d / %d 天\n活跃率：%.1f%%\n单日最高：%d 次",
+                DateUtils.formatYearMonth(monthStart), totalRecords, activeDays, daysInMonth,
+                activeRate, bestDay);
+    }
+
+    public String buildMonthCompare(long userId) {
+        long thisMonth = DateUtils.startOfMonth(System.currentTimeMillis());
+        long nextMonth = DateUtils.addMonths(thisMonth, 1);
+        long lastMonth = DateUtils.addMonths(thisMonth, -1);
+        int thisCount = countRecordsInRange(userId, thisMonth, nextMonth);
+        int lastCount = countRecordsInRange(userId, lastMonth, thisMonth);
+        int thisActive = countActiveDaysInRange(userId, thisMonth, nextMonth);
+        int lastActive = countActiveDaysInRange(userId, lastMonth, thisMonth);
+        return "月统计对比\n"
+                + "本月打卡记录：" + thisCount + " 次，活跃 " + thisActive + " 天\n"
+                + "上月打卡记录：" + lastCount + " 次，活跃 " + lastActive + " 天\n"
+                + "变化：" + signedDiff(thisCount - lastCount) + " 次";
+    }
+
+    private int countRecordsInRange(long userId, long fromInclusive, long toExclusive) {
+        SQLiteDatabase db = getReadableDatabase();
+        String sql = "SELECT COUNT(*) FROM check_records r JOIN habits h ON r.habit_id=h.id " +
+                "WHERE h.user_id=? AND r.checked_at>=? AND r.checked_at<?";
+        try (Cursor cursor = db.rawQuery(sql, new String[]{String.valueOf(userId),
+                String.valueOf(fromInclusive), String.valueOf(toExclusive)})) {
+            return cursor.moveToFirst() ? cursor.getInt(0) : 0;
+        }
+    }
+
+    private int countActiveDaysInRange(long userId, long fromInclusive, long toExclusive) {
+        return getDailyCheckCounts(userId, fromInclusive, toExclusive).size();
+    }
+
+    private String signedDiff(int value) {
+        return value > 0 ? "+" + value : String.valueOf(value);
     }
 
     public String normalizeCategory(String category) {

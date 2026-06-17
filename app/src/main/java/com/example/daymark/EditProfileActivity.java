@@ -2,6 +2,7 @@ package com.example.daymark;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -21,6 +22,8 @@ import com.google.android.material.textfield.TextInputEditText;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public class EditProfileActivity extends Activity {
     private static final int REQUEST_TAKE_PHOTO = 1;
@@ -165,6 +168,9 @@ public class EditProfileActivity extends Activity {
                 photoUri = FileProvider.getUriForFile(this,
                         getPackageName() + ".fileprovider", photoFile);
                 takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                takePictureIntent.setClipData(ClipData.newRawUri("avatar_photo", photoUri));
                 startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
             } catch (IOException e) {
                 Toast.makeText(this, "无法创建照片文件", Toast.LENGTH_SHORT).show();
@@ -175,7 +181,10 @@ public class EditProfileActivity extends Activity {
     }
 
     private void pickPhoto() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         startActivityForResult(intent, REQUEST_PICK_PHOTO);
     }
 
@@ -191,10 +200,42 @@ public class EditProfileActivity extends Activity {
             } else if (requestCode == REQUEST_PICK_PHOTO && data != null) {
                 Uri selectedImage = data.getData();
                 if (selectedImage != null) {
-                    currentAvatarUri = selectedImage.toString();
-                    loadAvatar(currentAvatarUri);
+                    importPickedAvatar(selectedImage);
                 }
             }
+        }
+    }
+
+    private void importPickedAvatar(Uri selectedImage) {
+        try {
+            getContentResolver().takePersistableUriPermission(
+                    selectedImage, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            currentAvatarUri = selectedImage.toString();
+            loadAvatar(currentAvatarUri);
+        } catch (SecurityException e) {
+            copyAvatarToPrivateStorage(selectedImage);
+        }
+    }
+
+    private void copyAvatarToPrivateStorage(Uri sourceUri) {
+        try {
+            File dest = ImageUtils.createImageFile(this);
+            try (InputStream in = getContentResolver().openInputStream(sourceUri);
+                 OutputStream out = new java.io.FileOutputStream(dest)) {
+                if (in == null) {
+                    throw new IOException("无法读取头像文件");
+                }
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+            }
+            Uri stored = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", dest);
+            currentAvatarUri = stored.toString();
+            loadAvatar(currentAvatarUri);
+        } catch (IOException e) {
+            Toast.makeText(this, "头像保存失败", Toast.LENGTH_SHORT).show();
         }
     }
 

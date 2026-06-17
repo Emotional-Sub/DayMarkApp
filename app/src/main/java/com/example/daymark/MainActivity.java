@@ -80,6 +80,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         sortSpinner = findViewById(R.id.sortSpinner);
         MaterialButton addButton = findViewById(R.id.addButton);
         MaterialButton accountButton = findViewById(R.id.accountButton);
+        MaterialButton templateButton = findViewById(R.id.templateButton);
         MaterialButton calendarButton = findViewById(R.id.calendarButton);
         MaterialButton statsButton = findViewById(R.id.statsButton);
         MaterialButton historyButton = findViewById(R.id.historyButton);
@@ -122,6 +123,11 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             Intent intent = new Intent(this, ProfileActivity.class);
             intent.putExtra("user_id", userId);
             intent.putExtra("username", username);
+            startActivity(intent);
+        });
+        templateButton.setOnClickListener(v -> {
+            Intent intent = new Intent(this, TemplateLibraryActivity.class);
+            intent.putExtra("user_id", userId);
             startActivity(intent);
         });
         calendarButton.setOnClickListener(v -> {

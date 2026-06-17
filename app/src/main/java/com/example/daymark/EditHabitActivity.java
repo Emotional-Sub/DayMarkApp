@@ -122,6 +122,7 @@ public class EditHabitActivity extends Activity {
             loadHabit(habitId);
         } else {
             updateFrequencyVisibility(Habit.FREQ_DAILY);
+            applyTemplatePrefill();
         }
 
         cameraButton.setOnClickListener(v -> openCamera());
@@ -254,6 +255,55 @@ public class EditHabitActivity extends Activity {
         }
         if (habit.targetDays > 0) {
             targetDaysEdit.setText(String.valueOf(habit.targetDays));
+        }
+    }
+
+    private void applyTemplatePrefill() {
+        Intent intent = getIntent();
+        String title = intent.getStringExtra("prefill_title");
+        String content = intent.getStringExtra("prefill_content");
+        String category = intent.getStringExtra("prefill_category");
+        String time = intent.getStringExtra("prefill_time");
+        String reminderTime = intent.getStringExtra("prefill_reminder_time");
+        if (!TextUtils.isEmpty(title)) {
+            titleEdit.setText(title);
+        }
+        if (!TextUtils.isEmpty(content)) {
+            contentEdit.setText(content);
+        }
+        if (!TextUtils.isEmpty(category)) {
+            setCategorySelection(category);
+        }
+        if (!TextUtils.isEmpty(time)) {
+            timeEdit.setText(time);
+        }
+        if (!TextUtils.isEmpty(reminderTime)) {
+            reminderEdit.setText(reminderTime);
+        }
+
+        int frequencyType = intent.getIntExtra("prefill_frequency_type", Habit.FREQ_DAILY);
+        String frequencyDays = intent.getStringExtra("prefill_frequency_days");
+        int frequencyCount = intent.getIntExtra("prefill_frequency_count", 0);
+        int targetDays = intent.getIntExtra("prefill_target_days", 0);
+        frequencySpinner.setSelection(clampFrequency(frequencyType));
+        updateFrequencyVisibility(frequencyType);
+        if (!TextUtils.isEmpty(frequencyDays)) {
+            String[] parts = frequencyDays.split(",");
+            for (String part : parts) {
+                try {
+                    int day = Integer.parseInt(part.trim());
+                    if (day >= 1 && day <= dayToggles.length) {
+                        dayToggles[day - 1].setChecked(true);
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        if (frequencyCount > 0) {
+            frequencyCountEdit.setText(String.valueOf(frequencyCount));
+        }
+        if (targetDays > 0) {
+            targetDaysEdit.setText(String.valueOf(targetDays));
         }
     }
 

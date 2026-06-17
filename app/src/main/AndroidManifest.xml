@@ -44,6 +44,9 @@
             android:name=".AchievementsActivity"
             android:exported="false" />
         <activity
+            android:name=".TemplateLibraryActivity"
+            android:exported="false" />
+        <activity
             android:name=".StatsActivity"
             android:exported="false" />
         <activity
