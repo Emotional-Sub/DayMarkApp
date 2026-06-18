@@ -30,6 +30,7 @@ import java.util.Set;
 public class DayMarkDbHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "daymark.db";
     private static final int DB_VERSION = 8;
+    private static final String LEGACY_DEMO_USERNAME = "demo";
 
     /** Returned by {@link #login} / {@link #register} when there is no matching or valid user. */
     public static final long NO_USER = -1;
@@ -167,7 +168,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
      */
     private boolean backupDatabaseToJson(SQLiteDatabase db) {
         try {
-            JSONObject backup = buildBackupJson(db);
+            JSONObject backup = buildBackupJson(db, null);
 
             // Write to file
             File backupDir = new File(context.getFilesDir(), "db_backups");
@@ -195,20 +196,30 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
-    private JSONObject buildBackupJson(SQLiteDatabase db) throws Exception {
+    private JSONObject buildBackupJson(SQLiteDatabase db, String preferredUsername) throws Exception {
         Logger.i("Starting database backup to JSON");
         JSONObject backup = new JSONObject();
         backup.put("backup_version", 1);
         backup.put("db_version", DB_VERSION);
         backup.put("timestamp", System.currentTimeMillis());
+        if (!TextUtils.isEmpty(preferredUsername) && !isLegacyDemoUsername(preferredUsername)) {
+            backup.put("preferred_username", preferredUsername.trim());
+        }
+
+        boolean excludeLegacyDemo = hasNonDemoUsers(db);
 
         // Backup users table
         JSONArray users = new JSONArray();
+        Set<Long> includedUserIds = new HashSet<>();
         try (Cursor cursor = db.query("users", null, null, null, null, null, null)) {
             while (cursor.moveToNext()) {
+                String username = cursor.getString(cursor.getColumnIndexOrThrow("username"));
+                if (excludeLegacyDemo && isLegacyDemoUsername(username)) {
+                    continue;
+                }
                 JSONObject user = new JSONObject();
                 user.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-                user.put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")));
+                user.put("username", username);
                 user.put("password", cursor.getString(cursor.getColumnIndexOrThrow("password")));
                 int saltIdx = cursor.getColumnIndex("salt");
                 if (saltIdx >= 0 && !cursor.isNull(saltIdx)) {
@@ -224,6 +235,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     user.put("avatar_uri", avatarUri);
                     putImageBackupData(user, "avatar", avatarUri);
                 }
+                includedUserIds.add(user.getLong("id"));
                 users.put(user);
             }
         }
@@ -231,13 +243,18 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
         // Backup habits table
         JSONArray habits = new JSONArray();
+        Set<Long> includedHabitIds = new HashSet<>();
         try (Cursor cursor = db.query("habits", null, null, null, null, null, null)) {
             while (cursor.moveToNext()) {
                 JSONObject habit = new JSONObject();
                 habit.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
                 int userIdIdx = cursor.getColumnIndex("user_id");
                 if (userIdIdx >= 0) {
-                    habit.put("user_id", cursor.getLong(userIdIdx));
+                    long userId = cursor.getLong(userIdIdx);
+                    if (!includedUserIds.contains(userId)) {
+                        continue;
+                    }
+                    habit.put("user_id", userId);
                 }
                 habit.put("title", cursor.getString(cursor.getColumnIndexOrThrow("title")));
                 habit.put("content", cursor.getString(cursor.getColumnIndexOrThrow("content")));
@@ -261,6 +278,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 copyColumnIfExists(cursor, habit, "target_days");
                 copyColumnIfExists(cursor, habit, "sort_order");
 
+                includedHabitIds.add(habit.getLong("id"));
                 habits.put(habit);
             }
         }
@@ -270,9 +288,13 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         JSONArray records = new JSONArray();
         try (Cursor cursor = db.query("check_records", null, null, null, null, null, null)) {
             while (cursor.moveToNext()) {
+                long habitId = cursor.getLong(cursor.getColumnIndexOrThrow("habit_id"));
+                if (!includedHabitIds.contains(habitId)) {
+                    continue;
+                }
                 JSONObject record = new JSONObject();
                 record.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")));
-                record.put("habit_id", cursor.getLong(cursor.getColumnIndexOrThrow("habit_id")));
+                record.put("habit_id", habitId);
                 record.put("checked_at", cursor.getLong(cursor.getColumnIndexOrThrow("checked_at")));
                 int noteIdx = cursor.getColumnIndex("note");
                 if (noteIdx >= 0 && !cursor.isNull(noteIdx)) {
@@ -292,8 +314,13 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
     @WorkerThread
     public boolean exportBackupToStream(OutputStream outputStream) {
+        return exportBackupToStream(outputStream, null);
+    }
+
+    @WorkerThread
+    public boolean exportBackupToStream(OutputStream outputStream, String preferredUsername) {
         try {
-            JSONObject backup = buildBackupJson(getReadableDatabase());
+            JSONObject backup = buildBackupJson(getReadableDatabase(), preferredUsername);
             writeBackupJson(backup, outputStream);
             Logger.i("Database backup exported to destination stream");
             return true;
@@ -322,6 +349,38 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     break;
             }
         }
+    }
+
+    private boolean hasNonDemoUsers(SQLiteDatabase db) {
+        try (Cursor cursor = db.query("users", new String[]{"username"},
+                "LOWER(username) <> ?", new String[]{LEGACY_DEMO_USERNAME},
+                null, null, null, "1")) {
+            return cursor.moveToFirst();
+        }
+    }
+
+    private boolean isLegacyDemoUsername(String username) {
+        return LEGACY_DEMO_USERNAME.equalsIgnoreCase(username == null ? "" : username.trim());
+    }
+
+    private Set<Long> collectIncludedBackupUserIds(JSONArray users) throws Exception {
+        boolean hasNonDemo = false;
+        for (int i = 0; i < users.length(); i++) {
+            JSONObject user = users.getJSONObject(i);
+            if (!isLegacyDemoUsername(user.optString("username", ""))) {
+                hasNonDemo = true;
+                break;
+            }
+        }
+        Set<Long> includedIds = new HashSet<>();
+        for (int i = 0; i < users.length(); i++) {
+            JSONObject user = users.getJSONObject(i);
+            if (hasNonDemo && isLegacyDemoUsername(user.optString("username", ""))) {
+                continue;
+            }
+            includedIds.add(user.getLong("id"));
+        }
+        return includedIds;
     }
 
     private void putImageBackupData(JSONObject target, String prefix, String imageUri) {
@@ -402,26 +461,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     }
 
     private void insertDefaultData(SQLiteDatabase db) {
-        String salt = PasswordUtils.newSalt();
-        ContentValues user = new ContentValues();
-        user.put("username", "demo");
-        user.put("password", PasswordUtils.hash("123456", salt));
-        user.put("salt", salt);
-        long demoId = db.insert("users", null, user);
-        if (demoId == NO_USER) {
-            demoId = 1;
-        }
-
-        long now = System.currentTimeMillis();
-        long readId = insertHabit(db, demoId, "晨间阅读", "每天阅读 20 分钟，记录一句喜欢的话。", "每天 07:30",
-                "", "学习", "07:30", 3, now - DateUtils.DAY_MS, now,
-                Habit.FREQ_DAILY, "", 0, 21);
-        long sportId = insertHabit(db, demoId, "运动打卡", "完成一次散步、跑步或拉伸，让身体醒过来。", "每周三次",
-                "", "运动", "18:30", 1, now, now + 1,
-                Habit.FREQ_WEEKLY_COUNT, "", 3, 0);
-        insertRecord(db, readId, "读完一章，状态不错。", now - DateUtils.DAY_MS);
-        insertRecord(db, readId, "今天继续阅读。", now - 2 * DateUtils.DAY_MS);
-        insertRecord(db, sportId, "散步 30 分钟。", now);
+        // New installs no longer seed a demo account or sample habits.
     }
 
     private long insertHabit(SQLiteDatabase db, long userId, String title, String content, String timeText,
@@ -1412,6 +1452,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             JSONArray habits = backup.getJSONArray("habits");
             JSONArray records = backup.getJSONArray("check_records");
             List<Habit> oldReminderHabits = getHabitsWithReminder();
+            Set<Long> includedUserIds = collectIncludedBackupUserIds(users);
 
             SQLiteDatabase db = getWritableDatabase();
             db.beginTransaction();
@@ -1424,8 +1465,12 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 // Restore users
                 for (int i = 0; i < users.length(); i++) {
                     JSONObject user = users.getJSONObject(i);
+                    long userId = user.getLong("id");
+                    if (!includedUserIds.contains(userId)) {
+                        continue;
+                    }
                     ContentValues values = new ContentValues();
-                    values.put("id", user.getLong("id"));
+                    values.put("id", userId);
                     values.put("username", user.getString("username"));
                     values.put("password", user.getString("password"));
                     if (user.has("salt") && !user.isNull("salt")) {
@@ -1445,11 +1490,17 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 }
 
                 // Restore habits
+                Set<Long> includedHabitIds = new HashSet<>();
                 for (int i = 0; i < habits.length(); i++) {
                     JSONObject habit = habits.getJSONObject(i);
+                    long userId = habit.getLong("user_id");
+                    if (!includedUserIds.contains(userId)) {
+                        continue;
+                    }
                     ContentValues values = new ContentValues();
-                    values.put("id", habit.getLong("id"));
-                    values.put("user_id", habit.getLong("user_id"));
+                    long habitId = habit.getLong("id");
+                    values.put("id", habitId);
+                    values.put("user_id", userId);
                     values.put("title", habit.getString("title"));
                     values.put("content", habit.getString("content"));
                     values.put("time_text", habit.getString("time_text"));
@@ -1483,14 +1534,19 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                         values.put("sort_order", habit.getInt("sort_order"));
                     }
                     db.insert("habits", null, values);
+                    includedHabitIds.add(habitId);
                 }
 
                 // Restore check records
                 for (int i = 0; i < records.length(); i++) {
                     JSONObject record = records.getJSONObject(i);
+                    long habitId = record.getLong("habit_id");
+                    if (!includedHabitIds.contains(habitId)) {
+                        continue;
+                    }
                     ContentValues values = new ContentValues();
                     values.put("id", record.getLong("id"));
-                    values.put("habit_id", record.getLong("habit_id"));
+                    values.put("habit_id", habitId);
                     if (record.has("note") && !record.isNull("note")) {
                         values.put("note", record.getString("note"));
                     }

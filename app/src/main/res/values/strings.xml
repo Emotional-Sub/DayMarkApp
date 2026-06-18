@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DayMark 每日打卡</string>
+    <string name="app_name">DayMark</string>
     <string name="common_ok">确定</string>
     <string name="common_cancel">取消</string>
     <string name="common_back">返回</string>
@@ -28,9 +28,6 @@
     <string name="login_file_chooser_title">选择备份文件</string>
     <string name="login_file_manager_missing">未找到文件管理器</string>
     <string name="login_session_save_log">Session saved securely for user: %1$s</string>
-    <string name="login_demo_username" translatable="false">demo</string>
-    <string name="login_demo_password" translatable="false">123456</string>
-
     <string name="main_welcome_default">我的打卡</string>
     <string name="main_welcome_format">%1$s 的打卡</string>
     <string name="main_summary_default">今天也要稳稳完成</string>

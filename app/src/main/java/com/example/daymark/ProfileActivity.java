@@ -419,7 +419,7 @@ public class ProfileActivity extends Activity {
                 if (outputStream == null) {
                     throw new java.io.IOException(getString(R.string.profile_export_write_failed));
                 }
-                success = dbHelper.exportBackupToStream(outputStream);
+                success = dbHelper.exportBackupToStream(outputStream, username);
             } catch (Exception e) {
                 Logger.e("Export failed", e);
             }

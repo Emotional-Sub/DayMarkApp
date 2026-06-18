@@ -21,6 +21,7 @@ import java.security.GeneralSecurityException;
 
 public class LoginActivity extends Activity {
     private static final int REQUEST_IMPORT_BACKUP = 200;
+    private static final String LEGACY_DEMO_USERNAME = "demo";
 
     private TextInputEditText usernameEdit;
     private TextInputEditText passwordEdit;
@@ -117,8 +118,8 @@ public class LoginActivity extends Activity {
                 passwordEdit.setText(securePreferences.getString("password", ""));
             }
         } else {
-            usernameEdit.setText(R.string.login_demo_username);
-            passwordEdit.setText(R.string.login_demo_password);
+            usernameEdit.setText("");
+            passwordEdit.setText("");
         }
     }
 
@@ -290,11 +291,30 @@ public class LoginActivity extends Activity {
                     builder.append(line);
                 }
             }
-            org.json.JSONArray users = new org.json.JSONObject(builder.toString()).optJSONArray("users");
+            org.json.JSONObject backup = new org.json.JSONObject(builder.toString());
+            String preferredUsername = backup.optString("preferred_username", null);
+            if (!TextUtils.isEmpty(preferredUsername)
+                    && !LEGACY_DEMO_USERNAME.equalsIgnoreCase(preferredUsername.trim())) {
+                return preferredUsername.trim();
+            }
+            org.json.JSONArray users = backup.optJSONArray("users");
             if (users == null || users.length() == 0) {
                 return null;
             }
-            return users.getJSONObject(0).optString("username", null);
+            String fallbackUsername = null;
+            for (int i = 0; i < users.length(); i++) {
+                String username = users.getJSONObject(i).optString("username", null);
+                if (TextUtils.isEmpty(username)) {
+                    continue;
+                }
+                if (!LEGACY_DEMO_USERNAME.equalsIgnoreCase(username.trim())) {
+                    return username;
+                }
+                if (fallbackUsername == null) {
+                    fallbackUsername = username;
+                }
+            }
+            return fallbackUsername;
         } catch (Exception e) {
             Logger.w("Failed to extract username from backup", e);
             return null;
