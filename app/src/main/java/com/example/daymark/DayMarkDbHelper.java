@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
 import android.text.TextUtils;
+import android.util.Base64;
 
 import androidx.annotation.WorkerThread;
 
@@ -36,6 +37,7 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
     public static final int PROFILE_UPDATE_OLD_PASSWORD_REQUIRED = 1;
     public static final int PROFILE_UPDATE_OLD_PASSWORD_INCORRECT = 2;
     public static final int PROFILE_UPDATE_FAILED = 3;
+    public static final int PROFILE_UPDATE_NEW_PASSWORD_SAME = 4;
 
     private final Context context;
 
@@ -218,7 +220,9 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 }
                 int avatarUriIdx = cursor.getColumnIndex("avatar_uri");
                 if (avatarUriIdx >= 0 && !cursor.isNull(avatarUriIdx)) {
-                    user.put("avatar_uri", cursor.getString(avatarUriIdx));
+                    String avatarUri = cursor.getString(avatarUriIdx);
+                    user.put("avatar_uri", avatarUri);
+                    putImageBackupData(user, "avatar", avatarUri);
                 }
                 users.put(user);
             }
@@ -245,6 +249,11 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
 
                 // Optional columns
                 copyColumnIfExists(cursor, habit, "image_uri");
+                int imageUriIdx = cursor.getColumnIndex("image_uri");
+                if (imageUriIdx >= 0 && !cursor.isNull(imageUriIdx)) {
+                    String imageUri = cursor.getString(imageUriIdx);
+                    putImageBackupData(habit, "image", imageUri);
+                }
                 copyColumnIfExists(cursor, habit, "reminder_time");
                 copyColumnIfExists(cursor, habit, "frequency_type");
                 copyColumnIfExists(cursor, habit, "frequency_days");
@@ -312,6 +321,42 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     json.put(columnName, cursor.getDouble(idx));
                     break;
             }
+        }
+    }
+
+    private void putImageBackupData(JSONObject target, String prefix, String imageUri) {
+        if (target == null || TextUtils.isEmpty(imageUri) || imageUri.startsWith("default_")) {
+            return;
+        }
+        try {
+            byte[] bytes = ImageUtils.readImageBytes(context, imageUri);
+            if (bytes == null || bytes.length == 0) {
+                return;
+            }
+            target.put(prefix + "_data", Base64.encodeToString(bytes, Base64.NO_WRAP));
+            target.put(prefix + "_name", ImageUtils.backupFileNameFromUri(
+                    imageUri, prefix + "_" + System.currentTimeMillis() + ".jpg"));
+        } catch (Exception e) {
+            Logger.w("Failed to include image data in backup: " + imageUri, e);
+        }
+    }
+
+    private String restoreImageFromBackup(JSONObject source, String dataKey, String nameKey,
+                                         String directoryName, String fallbackUri) {
+        if (source == null || !source.has(dataKey) || source.isNull(dataKey)) {
+            return fallbackUri;
+        }
+        try {
+            String data = source.getString(dataKey);
+            if (TextUtils.isEmpty(data)) {
+                return fallbackUri;
+            }
+            String fileName = source.optString(nameKey, directoryName + "_" + System.currentTimeMillis() + ".jpg");
+            String restored = ImageUtils.restoreBackupImage(context, data, fileName, directoryName);
+            return TextUtils.isEmpty(restored) ? fallbackUri : restored;
+        } catch (Exception e) {
+            Logger.w("Failed to restore backup image", e);
+            return fallbackUri;
         }
     }
 
@@ -1020,6 +1065,9 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                 if (!PasswordUtils.matches(oldPassword, salt, storedHash)) {
                     return PROFILE_UPDATE_OLD_PASSWORD_INCORRECT;
                 }
+                if (PasswordUtils.matches(newPassword, salt, storedHash)) {
+                    return PROFILE_UPDATE_NEW_PASSWORD_SAME;
+                }
                 String newSalt = PasswordUtils.newSalt();
                 values.put("salt", newSalt);
                 values.put("password", PasswordUtils.hash(newPassword, newSalt));
@@ -1052,6 +1100,9 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
             salt = cursor.isNull(1) ? "" : cursor.getString(1);
         }
         if (!PasswordUtils.matches(oldPassword, salt, storedHash)) {
+            return false;
+        }
+        if (PasswordUtils.matches(newPassword, salt, storedHash)) {
             return false;
         }
         String newSalt = PasswordUtils.newSalt();
@@ -1383,8 +1434,12 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     if (user.has("display_name") && !user.isNull("display_name")) {
                         values.put("display_name", user.getString("display_name"));
                     }
-                    if (user.has("avatar_uri") && !user.isNull("avatar_uri")) {
-                        values.put("avatar_uri", user.getString("avatar_uri"));
+                    String avatarUri = user.has("avatar_uri") && !user.isNull("avatar_uri")
+                            ? user.getString("avatar_uri") : null;
+                    avatarUri = restoreImageFromBackup(user, "avatar_data", "avatar_name",
+                            "avatar_pictures", avatarUri);
+                    if (!TextUtils.isEmpty(avatarUri)) {
+                        values.put("avatar_uri", avatarUri);
                     }
                     db.insert("users", null, values);
                 }
@@ -1398,8 +1453,12 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
                     values.put("title", habit.getString("title"));
                     values.put("content", habit.getString("content"));
                     values.put("time_text", habit.getString("time_text"));
-                    if (habit.has("image_uri") && !habit.isNull("image_uri")) {
-                        values.put("image_uri", habit.getString("image_uri"));
+                    String imageUri = habit.has("image_uri") && !habit.isNull("image_uri")
+                            ? habit.getString("image_uri") : null;
+                    imageUri = restoreImageFromBackup(habit, "image_data", "image_name",
+                            "habit_photos", imageUri);
+                    if (!TextUtils.isEmpty(imageUri)) {
+                        values.put("image_uri", imageUri);
                     }
                     values.put("category", habit.getString("category"));
                     if (habit.has("reminder_time") && !habit.isNull("reminder_time")) {

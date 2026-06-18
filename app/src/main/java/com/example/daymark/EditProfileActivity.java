@@ -96,16 +96,14 @@ public class EditProfileActivity extends Activity {
                 displayNameEdit.setText(displayName);
                 currentAvatarUri = avatarUri;
                 originalAvatarUri = avatarUri;
-                if (!TextUtils.isEmpty(avatarUri)) {
-                    loadAvatar(avatarUri);
-                }
+                loadAvatar(avatarUri);
             });
         });
     }
 
     private void loadAvatar(String uri) {
         if (TextUtils.isEmpty(uri)) {
-            avatarImage.setImageDrawable(null);
+            avatarImage.setImageResource(R.drawable.ic_profile_24);
             avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
             return;
         }
@@ -115,11 +113,14 @@ public class EditProfileActivity extends Activity {
                 if (index >= 0 && index < DEFAULT_AVATAR_COLORS.length) {
                     avatarImage.setImageDrawable(null);
                     avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[index]);
+                    return;
                 }
-                return;
             } catch (NumberFormatException ignored) {
                 // Fall back to the default avatar below.
             }
+            avatarImage.setImageResource(R.drawable.ic_profile_24);
+            avatarImage.setBackgroundColor(DEFAULT_AVATAR_COLORS[0]);
+            return;
         }
         avatarImage.setBackground(null);
         ImageLoader.load(avatarImage, uri, 200);
@@ -151,7 +152,7 @@ public class EditProfileActivity extends Activity {
         }
 
         AlertDialog dialog = builder.setView(dialogView)
-                .setNegativeButton("取消", null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .create();
         for (int i = 0; i < gridLayout.getChildCount(); i++) {
             gridLayout.getChildAt(i).setTag(dialog);
@@ -284,6 +285,10 @@ public class EditProfileActivity extends Activity {
                 Toast.makeText(this, "两次输入的新密码不一致", Toast.LENGTH_SHORT).show();
                 return;
             }
+            if (newPassword.equals(oldPassword)) {
+                Toast.makeText(this, "新密码不能与原密码相同", Toast.LENGTH_SHORT).show();
+                return;
+            }
         }
 
         final String finalAvatarUri = currentAvatarUri;
@@ -308,6 +313,8 @@ public class EditProfileActivity extends Activity {
                     Toast.makeText(this, "请输入原密码", Toast.LENGTH_SHORT).show();
                 } else if (result == DayMarkDbHelper.PROFILE_UPDATE_OLD_PASSWORD_INCORRECT) {
                     Toast.makeText(this, "原密码不正确", Toast.LENGTH_SHORT).show();
+                } else if (result == DayMarkDbHelper.PROFILE_UPDATE_NEW_PASSWORD_SAME) {
+                    Toast.makeText(this, "新密码不能与原密码相同", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
                 }

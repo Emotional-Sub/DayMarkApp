@@ -239,11 +239,22 @@ public class LoginActivity extends Activity {
                         outputStream.write(buffer, 0, bytesRead);
                     }
                 }
+                String importedUsername = extractFirstUsername(tempFile);
                 boolean success = dbHelper.restoreFromJson(tempFile.getAbsolutePath());
                 tempFile.delete();
+                String finalImportedUsername = importedUsername;
                 AppExecutors.main().execute(() -> {
                     if (isFinishing()) {
                         return;
+                    }
+                    if (success) {
+                        clearLocalAuthState(true);
+                        rememberCheck.setChecked(false);
+                        passwordEdit.setText("");
+                        if (!TextUtils.isEmpty(finalImportedUsername)) {
+                            usernameEdit.setText(finalImportedUsername);
+                            usernameEdit.setSelection(finalImportedUsername.length());
+                        }
                     }
                     Toast.makeText(this,
                             success ? R.string.login_import_success : R.string.login_import_failed,
@@ -262,6 +273,31 @@ public class LoginActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_IMPORT_BACKUP && resultCode == RESULT_OK && data != null && data.getData() != null) {
             importBackup(data.getData());
+        }
+    }
+
+    private String extractFirstUsername(java.io.File backupFile) {
+        if (backupFile == null || !backupFile.exists()) {
+            return null;
+        }
+        try {
+            StringBuilder builder = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(new java.io.FileInputStream(backupFile),
+                            java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    builder.append(line);
+                }
+            }
+            org.json.JSONArray users = new org.json.JSONObject(builder.toString()).optJSONArray("users");
+            if (users == null || users.length() == 0) {
+                return null;
+            }
+            return users.getJSONObject(0).optString("username", null);
+        } catch (Exception e) {
+            Logger.w("Failed to extract username from backup", e);
+            return null;
         }
     }
 

@@ -474,14 +474,15 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/deleteAccountButton"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+            style="@style/Widget.Material3.Button"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="8dp"
             android:text="@string/profile_delete_account"
+            android:textColor="@color/onError"
             android:textSize="15sp"
-            app:cornerRadius="12dp"
-            app:strokeColor="@color/error" />
+            app:backgroundTint="@color/error"
+            app:cornerRadius="12dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/backButton"
