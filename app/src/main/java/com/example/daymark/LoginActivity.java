@@ -1,8 +1,10 @@
 package com.example.daymark;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.CheckBox;
@@ -18,6 +20,8 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 public class LoginActivity extends Activity {
+    private static final int REQUEST_IMPORT_BACKUP = 200;
+
     private TextInputEditText usernameEdit;
     private TextInputEditText passwordEdit;
     private CheckBox rememberCheck;
@@ -58,10 +62,12 @@ public class LoginActivity extends Activity {
         rememberCheck = findViewById(R.id.rememberCheck);
         MaterialButton loginButton = findViewById(R.id.loginButton);
         MaterialButton registerButton = findViewById(R.id.registerButton);
+        MaterialButton importBackupButton = findViewById(R.id.importBackupButton);
 
         loadRememberedAccount();
         loginButton.setOnClickListener(v -> doLogin());
         registerButton.setOnClickListener(v -> doRegister());
+        importBackupButton.setOnClickListener(v -> showImportBackupDialog());
     }
 
     private void loadRememberedAccount() {
@@ -157,6 +163,65 @@ public class LoginActivity extends Activity {
         intent.putExtra("username", username);
         startActivity(intent);
         finish();
+    }
+
+    private void showImportBackupDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("导入备份")
+                .setMessage("从备份文件恢复数据后，请重新登录账号。")
+                .setPositiveButton("选择文件", (dialog, which) -> selectBackupFile())
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void selectBackupFile() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("application/json");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            startActivityForResult(Intent.createChooser(intent, "选择备份文件"), REQUEST_IMPORT_BACKUP);
+        } catch (android.content.ActivityNotFoundException e) {
+            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void importBackup(Uri uri) {
+        AppExecutors.io().execute(() -> {
+            try {
+                java.io.File tempFile = new java.io.File(getCacheDir(), "login_import_temp.json");
+                try (java.io.InputStream inputStream = getContentResolver().openInputStream(uri);
+                     java.io.OutputStream outputStream = new java.io.FileOutputStream(tempFile)) {
+                    if (inputStream == null) {
+                        throw new java.io.IOException("无法读取文件");
+                    }
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                }
+                boolean success = dbHelper.restoreFromJson(tempFile.getAbsolutePath());
+                tempFile.delete();
+                AppExecutors.main().execute(() -> {
+                    if (isFinishing()) {
+                        return;
+                    }
+                    Toast.makeText(this, success ? "导入成功，请重新登录" : "导入失败", Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                Logger.e("Login import backup failed", e);
+                AppExecutors.main().execute(() ->
+                        Toast.makeText(this, "导入失败", Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_IMPORT_BACKUP && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            importBackup(data.getData());
+        }
     }
 
     private void saveRememberState(String username, String password) {

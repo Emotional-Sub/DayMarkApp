@@ -358,14 +358,20 @@ public class ProfileActivity extends Activity {
 
                 boolean success = dbHelper.restoreFromJson(tempFile.getAbsolutePath());
                 tempFile.delete();
+                boolean currentUserStillExists = dbHelper.userExists(userId);
 
                 AppExecutors.main().execute(() -> {
                     if (isFinishing()) {
                         return;
                     }
                     if (success) {
-                        Toast.makeText(this, "导入成功，正在刷新...", Toast.LENGTH_SHORT).show();
-                        refresh();
+                        if (currentUserStillExists) {
+                            Toast.makeText(this, "导入成功，正在刷新...", Toast.LENGTH_SHORT).show();
+                            refresh();
+                        } else {
+                            Toast.makeText(this, "导入成功，请重新登录恢复的账号", Toast.LENGTH_LONG).show();
+                            goToLogin();
+                        }
                     } else {
                         Toast.makeText(this, "导入失败，请检查文件格式", Toast.LENGTH_LONG).show();
                     }

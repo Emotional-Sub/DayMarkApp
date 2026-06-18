@@ -945,6 +945,15 @@ public class DayMarkDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    @WorkerThread
+    public boolean userExists(long userId) {
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.query("users", new String[]{"id"}, "id=?",
+                new String[]{String.valueOf(userId)}, null, null, null, "1")) {
+            return cursor.moveToFirst();
+        }
+    }
+
     /**
      * Set the user's avatar URI. Can be a file URI, content URI, or a special "default_N" string
      * for default colored avatars.

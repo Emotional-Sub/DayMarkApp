@@ -111,6 +111,15 @@
                     android:text="注册新账号"
                     android:textAppearance="@style/TextAppearance.DayMark.Label.Large"
                     app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/importBackupButton"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="4dp"
+                    android:text="导入备份"
+                    android:textAppearance="@style/TextAppearance.DayMark.Label.Large" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
