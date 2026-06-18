@@ -28,6 +28,7 @@ public class LoginActivity extends Activity {
     private DayMarkDbHelper dbHelper;
     private SharedPreferences preferences;
     private SharedPreferences securePreferences;
+    private boolean forceBlankLoginForm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,6 +37,8 @@ public class LoginActivity extends Activity {
         dbHelper = new DayMarkDbHelper(this);
         preferences = getSharedPreferences("login", MODE_PRIVATE);
         securePreferences = createSecurePreferences();
+        forceBlankLoginForm = getIntent().getBooleanExtra("clear_login_fields", false);
+        boolean autoLoginEnabled = preferences.getBoolean("remember", false);
 
         long sessionUserId = DayMarkDbHelper.NO_USER;
         String sessionUsername = null;
@@ -48,8 +51,15 @@ public class LoginActivity extends Activity {
             }
         }
         if (sessionUserId != DayMarkDbHelper.NO_USER) {
-            goToMain(sessionUserId, sessionUsername);
-            return;
+            if (!autoLoginEnabled) {
+                clearLocalAuthState(false);
+            } else if (dbHelper.userExists(sessionUserId)) {
+                goToMain(sessionUserId, sessionUsername);
+                return;
+            } else {
+                clearLocalAuthState(true);
+                forceBlankLoginForm = true;
+            }
         }
 
         setContentView(R.layout.activity_login);
@@ -71,6 +81,12 @@ public class LoginActivity extends Activity {
     }
 
     private void loadRememberedAccount() {
+        if (forceBlankLoginForm) {
+            usernameEdit.setText("");
+            passwordEdit.setText("");
+            rememberCheck.setChecked(false);
+            return;
+        }
         if (preferences.contains("password")) {
             preferences.edit().remove("password").apply();
         }
@@ -101,7 +117,7 @@ public class LoginActivity extends Activity {
                 }
                 if (userId != DayMarkDbHelper.NO_USER) {
                     saveRememberState(username, password);
-                    if (securePreferences != null) {
+                    if (rememberCheck.isChecked() && securePreferences != null) {
                         try {
                             securePreferences.edit()
                                     .putLong("session_user_id", userId)
@@ -111,6 +127,8 @@ public class LoginActivity extends Activity {
                         } catch (Exception e) {
                             Logger.securityError("Failed to save encrypted session", e);
                         }
+                    } else {
+                        clearLocalAuthState(false);
                     }
                     preferences.edit()
                             .remove("session_user_id")
@@ -221,6 +239,28 @@ public class LoginActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_IMPORT_BACKUP && resultCode == RESULT_OK && data != null && data.getData() != null) {
             importBackup(data.getData());
+        }
+    }
+
+    private void clearLocalAuthState(boolean clearRememberedAccount) {
+        SharedPreferences.Editor editor = preferences.edit()
+                .remove("session_user_id")
+                .remove("session_username");
+        if (clearRememberedAccount) {
+            editor.remove("remember")
+                    .remove("username")
+                    .remove("password");
+        }
+        editor.apply();
+
+        if (securePreferences != null) {
+            SharedPreferences.Editor secureEditor = securePreferences.edit()
+                    .remove("session_user_id")
+                    .remove("session_username");
+            if (clearRememberedAccount) {
+                secureEditor.remove("password");
+            }
+            secureEditor.apply();
         }
     }
 

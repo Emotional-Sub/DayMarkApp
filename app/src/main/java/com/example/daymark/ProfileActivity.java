@@ -250,7 +250,7 @@ public class ProfileActivity extends Activity {
                             }
                             if (success) {
                                 Toast.makeText(this, "账号已删除", Toast.LENGTH_SHORT).show();
-                                goToLogin();
+                                goToLogin(true);
                             } else {
                                 Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
                             }
@@ -281,6 +281,10 @@ public class ProfileActivity extends Activity {
     }
 
     private void goToLogin() {
+        goToLogin(false);
+    }
+
+    private void goToLogin(boolean clearRememberedAccount) {
         try {
             String masterKeyAlias = androidx.security.crypto.MasterKeys.getOrCreate(
                     androidx.security.crypto.MasterKeys.AES256_GCM_SPEC);
@@ -291,18 +295,29 @@ public class ProfileActivity extends Activity {
                             this,
                             androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                             androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
-            securePrefs.edit()
+            android.content.SharedPreferences.Editor secureEditor = securePrefs.edit()
                     .remove("session_user_id")
-                    .remove("session_username")
-                    .apply();
+                    .remove("session_username");
+            if (clearRememberedAccount) {
+                secureEditor.remove("password");
+            }
+            secureEditor.apply();
         } catch (Exception e) {
             Logger.securityError("Failed to clear encrypted session", e);
         }
-        getSharedPreferences("login", MODE_PRIVATE).edit()
+        android.content.SharedPreferences.Editor editor = getSharedPreferences("login", MODE_PRIVATE).edit()
                 .remove("session_user_id")
-                .remove("session_username")
-                .apply();
+                .remove("session_username");
+        if (clearRememberedAccount) {
+            editor.remove("remember")
+                    .remove("username")
+                    .remove("password");
+        }
+        editor.apply();
         Intent intent = new Intent(this, LoginActivity.class);
+        if (clearRememberedAccount) {
+            intent.putExtra("clear_login_fields", true);
+        }
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
@@ -370,7 +385,7 @@ public class ProfileActivity extends Activity {
                             refresh();
                         } else {
                             Toast.makeText(this, "导入成功，请重新登录恢复的账号", Toast.LENGTH_LONG).show();
-                            goToLogin();
+                            goToLogin(true);
                         }
                     } else {
                         Toast.makeText(this, "导入失败，请检查文件格式", Toast.LENGTH_LONG).show();
