@@ -38,30 +38,6 @@ public class LoginActivity extends Activity {
         preferences = getSharedPreferences("login", MODE_PRIVATE);
         securePreferences = createSecurePreferences();
         forceBlankLoginForm = getIntent().getBooleanExtra("clear_login_fields", false);
-        boolean autoLoginEnabled = preferences.getBoolean("remember", false);
-
-        long sessionUserId = DayMarkDbHelper.NO_USER;
-        String sessionUsername = null;
-        if (securePreferences != null) {
-            try {
-                sessionUserId = securePreferences.getLong("session_user_id", DayMarkDbHelper.NO_USER);
-                sessionUsername = securePreferences.getString("session_username", null);
-            } catch (Exception e) {
-                Logger.securityError("Failed to read encrypted session", e);
-            }
-        }
-        if (sessionUserId != DayMarkDbHelper.NO_USER) {
-            if (!autoLoginEnabled) {
-                clearLocalAuthState(false);
-            } else if (dbHelper.userExists(sessionUserId)) {
-                goToMain(sessionUserId, sessionUsername);
-                return;
-            } else {
-                clearLocalAuthState(true);
-                forceBlankLoginForm = true;
-            }
-        }
-
         setContentView(R.layout.activity_login);
         if (securePreferences == null) {
             securePreferences = createSecurePreferences();
@@ -78,6 +54,49 @@ public class LoginActivity extends Activity {
         loginButton.setOnClickListener(v -> doLogin());
         registerButton.setOnClickListener(v -> doRegister());
         importBackupButton.setOnClickListener(v -> showImportBackupDialog());
+        restoreSessionIfNeeded();
+    }
+
+    private void restoreSessionIfNeeded() {
+        boolean autoLoginEnabled = preferences.getBoolean("remember", false);
+        if (securePreferences == null) {
+            return;
+        }
+
+        long sessionUserId = DayMarkDbHelper.NO_USER;
+        String sessionUsername = null;
+        try {
+            sessionUserId = securePreferences.getLong("session_user_id", DayMarkDbHelper.NO_USER);
+            sessionUsername = securePreferences.getString("session_username", null);
+        } catch (Exception e) {
+            Logger.securityError("Failed to read encrypted session", e);
+        }
+
+        if (sessionUserId == DayMarkDbHelper.NO_USER) {
+            return;
+        }
+        if (!autoLoginEnabled) {
+            clearLocalAuthState(false);
+            return;
+        }
+
+        final long finalSessionUserId = sessionUserId;
+        final String finalSessionUsername = sessionUsername;
+        AppExecutors.io().execute(() -> {
+            boolean exists = dbHelper.userExists(finalSessionUserId);
+            AppExecutors.main().execute(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (exists) {
+                    goToMain(finalSessionUserId, finalSessionUsername);
+                } else {
+                    clearLocalAuthState(true);
+                    forceBlankLoginForm = true;
+                    loadRememberedAccount();
+                }
+            });
+        });
     }
 
     private void loadRememberedAccount() {
@@ -98,8 +117,8 @@ public class LoginActivity extends Activity {
                 passwordEdit.setText(securePreferences.getString("password", ""));
             }
         } else {
-            usernameEdit.setText("demo");
-            passwordEdit.setText("123456");
+            usernameEdit.setText(R.string.login_demo_username);
+            passwordEdit.setText(R.string.login_demo_password);
         }
     }
 
@@ -123,7 +142,7 @@ public class LoginActivity extends Activity {
                                     .putLong("session_user_id", userId)
                                     .putString("session_username", username)
                                     .apply();
-                            Logger.d("Session saved securely for user: " + username);
+                            Logger.d(getString(R.string.login_session_save_log, username));
                         } catch (Exception e) {
                             Logger.securityError("Failed to save encrypted session", e);
                         }
@@ -136,7 +155,8 @@ public class LoginActivity extends Activity {
                             .apply();
                     goToMain(userId, username);
                 } else {
-                    Toast.makeText(this, "账号或密码不正确", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, R.string.login_error_invalid_credentials,
+                            Toast.LENGTH_SHORT).show();
                 }
             });
         });
@@ -155,9 +175,9 @@ public class LoginActivity extends Activity {
                     return;
                 }
                 if (result != DayMarkDbHelper.NO_USER) {
-                    Toast.makeText(this, "注册成功，请登录", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, R.string.login_register_success, Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(this, "用户名已存在", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, R.string.login_register_error_exists, Toast.LENGTH_SHORT).show();
                 }
             });
         });
@@ -165,11 +185,11 @@ public class LoginActivity extends Activity {
 
     private boolean validate(String username, String password) {
         if (TextUtils.isEmpty(username)) {
-            usernameEdit.setError("请输入用户名");
+            usernameEdit.setError(getString(R.string.login_error_empty_username));
             return false;
         }
         if (TextUtils.isEmpty(password)) {
-            passwordEdit.setError("请输入密码");
+            passwordEdit.setError(getString(R.string.login_error_empty_password));
             return false;
         }
         return true;
@@ -185,10 +205,10 @@ public class LoginActivity extends Activity {
 
     private void showImportBackupDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("导入备份")
-                .setMessage("从备份文件恢复数据后，请重新登录账号。")
-                .setPositiveButton("选择文件", (dialog, which) -> selectBackupFile())
-                .setNegativeButton("取消", null)
+                .setTitle(R.string.login_import_backup_title)
+                .setMessage(R.string.login_import_backup_message)
+                .setPositiveButton(R.string.login_import_backup_action, (dialog, which) -> selectBackupFile())
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
 
@@ -197,9 +217,10 @@ public class LoginActivity extends Activity {
         intent.setType("application/json");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         try {
-            startActivityForResult(Intent.createChooser(intent, "选择备份文件"), REQUEST_IMPORT_BACKUP);
+            startActivityForResult(Intent.createChooser(intent,
+                    getString(R.string.login_file_chooser_title)), REQUEST_IMPORT_BACKUP);
         } catch (android.content.ActivityNotFoundException e) {
-            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.login_file_manager_missing, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -224,12 +245,14 @@ public class LoginActivity extends Activity {
                     if (isFinishing()) {
                         return;
                     }
-                    Toast.makeText(this, success ? "导入成功，请重新登录" : "导入失败", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this,
+                            success ? R.string.login_import_success : R.string.login_import_failed,
+                            Toast.LENGTH_SHORT).show();
                 });
             } catch (Exception e) {
                 Logger.e("Login import backup failed", e);
                 AppExecutors.main().execute(() ->
-                        Toast.makeText(this, "导入失败", Toast.LENGTH_SHORT).show());
+                        Toast.makeText(this, R.string.login_import_failed, Toast.LENGTH_SHORT).show());
             }
         });
     }

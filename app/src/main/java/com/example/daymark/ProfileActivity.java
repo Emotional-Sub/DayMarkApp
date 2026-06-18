@@ -8,7 +8,6 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.GridLayout;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -78,7 +77,8 @@ public class ProfileActivity extends Activity {
         MaterialButton deleteAccountButton = findViewById(R.id.deleteAccountButton);
         MaterialButton backButton = findViewById(R.id.backButton);
 
-        accountText.setText("账号名：" + (username == null ? "" : username));
+        accountText.setText(getString(R.string.profile_account_name_format,
+                username == null ? "" : username));
         editProfileButton.setOnClickListener(v -> goToEditProfile());
         categoryStatsCard.setOnClickListener(v -> goToStats());
         achievementsCard.setOnClickListener(v -> goToAchievements());
@@ -138,7 +138,7 @@ public class ProfileActivity extends Activity {
 
     private String buildCategoryText(List<CategoryStat> stats) {
         if (stats.isEmpty()) {
-            return "还没有打卡事件";
+            return getString(R.string.profile_no_habits);
         }
         StringBuilder builder = new StringBuilder();
         for (int i = 0; i < stats.size(); i++) {
@@ -146,10 +146,8 @@ public class ProfileActivity extends Activity {
             if (i > 0) {
                 builder.append('\n');
             }
-            builder.append(stat.category)
-                    .append("：")
-                    .append(stat.habitCount).append(" 个事件，")
-                    .append(stat.checkCount).append(" 次打卡");
+            builder.append(getString(R.string.profile_category_summary_format,
+                    stat.category, stat.habitCount, stat.checkCount));
         }
         return builder.toString();
     }
@@ -216,13 +214,16 @@ public class ProfileActivity extends Activity {
                 String dateStr = DateUtils.formatDate(dayTimestamp);
                 StringBuilder content = new StringBuilder();
                 if (records.isEmpty()) {
-                    content.append("这一天还没有打卡记录");
+                    content.append(getString(R.string.profile_day_no_records));
                 } else {
-                    content.append("共打卡 ").append(checkCount).append(" 次：\n\n");
+                    content.append(getString(R.string.profile_day_total_checks_format, checkCount))
+                            .append("\n\n");
                     for (CheckRecord record : records) {
                         content.append("• ").append(record.habitTitle).append("\n");
                         if (!TextUtils.isEmpty(record.note)) {
-                            content.append("  备注：").append(record.note).append("\n");
+                            content.append("  ")
+                                    .append(getString(R.string.profile_day_note_prefix, record.note))
+                                    .append("\n");
                         }
                         content.append("  ").append(DateUtils.formatDateTime(record.checkedAt)).append("\n\n");
                     }
@@ -230,7 +231,7 @@ public class ProfileActivity extends Activity {
                 new AlertDialog.Builder(this)
                         .setTitle(dateStr)
                         .setMessage(content.toString())
-                        .setPositiveButton("确定", null)
+                        .setPositiveButton(R.string.common_ok, null)
                         .show();
             });
         });
@@ -238,10 +239,10 @@ public class ProfileActivity extends Activity {
 
     private void confirmDeleteAccount() {
         new AlertDialog.Builder(this)
-                .setTitle("删除账号")
-                .setMessage("将永久删除账号“" + (username == null ? "" : username)
-                        + "”及其所有打卡事件和记录，且无法恢复。确定吗？")
-                .setPositiveButton("永久删除", (dialog, which) -> {
+                .setTitle(R.string.profile_delete_account_title)
+                .setMessage(getString(R.string.profile_delete_account_message,
+                        username == null ? "" : username))
+                .setPositiveButton(R.string.profile_delete_account_confirm, (dialog, which) -> {
                     AppExecutors.io().execute(() -> {
                         boolean success = dbHelper.deleteUser(userId);
                         AppExecutors.main().execute(() -> {
@@ -249,15 +250,17 @@ public class ProfileActivity extends Activity {
                                 return;
                             }
                             if (success) {
-                                Toast.makeText(this, "账号已删除", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(this, R.string.profile_delete_account_success,
+                                        Toast.LENGTH_SHORT).show();
                                 goToLogin(true);
                             } else {
-                                Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(this, R.string.profile_delete_account_failed,
+                                        Toast.LENGTH_SHORT).show();
                             }
                         });
                     });
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
 
@@ -325,10 +328,10 @@ public class ProfileActivity extends Activity {
 
     private void showImportDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("导入数据")
-                .setMessage("警告：导入将覆盖当前所有数据。\n\n请确保已备份当前数据，导入操作不可撤销。")
-                .setPositiveButton("选择备份文件", (dialog, which) -> selectImportFile())
-                .setNegativeButton("取消", null)
+                .setTitle(R.string.profile_import_data_title)
+                .setMessage(R.string.profile_import_data_message)
+                .setPositiveButton(R.string.profile_choose_backup_file, (dialog, which) -> selectImportFile())
+                .setNegativeButton(R.string.common_cancel, null)
                 .show();
     }
 
@@ -337,9 +340,10 @@ public class ProfileActivity extends Activity {
         intent.setType("application/json");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         try {
-            startActivityForResult(Intent.createChooser(intent, "选择备份文件"), REQUEST_IMPORT_FILE);
+            startActivityForResult(Intent.createChooser(intent,
+                    getString(R.string.profile_choose_backup_file)), REQUEST_IMPORT_FILE);
         } catch (android.content.ActivityNotFoundException e) {
-            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.profile_file_manager_missing, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -347,11 +351,12 @@ public class ProfileActivity extends Activity {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/json");
-        intent.putExtra(Intent.EXTRA_TITLE, "daymark_backup_" + System.currentTimeMillis() + ".json");
+        intent.putExtra(Intent.EXTRA_TITLE,
+                getString(R.string.profile_backup_filename, System.currentTimeMillis()));
         try {
             startActivityForResult(intent, REQUEST_EXPORT_FILE);
         } catch (android.content.ActivityNotFoundException e) {
-            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.profile_file_manager_missing, Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -362,7 +367,7 @@ public class ProfileActivity extends Activity {
                 try (java.io.InputStream inputStream = getContentResolver().openInputStream(uri);
                      java.io.OutputStream outputStream = new java.io.FileOutputStream(tempFile)) {
                     if (inputStream == null) {
-                        throw new java.io.IOException("无法读取文件");
+                        throw new java.io.IOException(getString(R.string.profile_import_read_failed));
                     }
                     byte[] buffer = new byte[8192];
                     int bytesRead;
@@ -381,21 +386,26 @@ public class ProfileActivity extends Activity {
                     }
                     if (success) {
                         if (currentUserStillExists) {
-                            Toast.makeText(this, "导入成功，正在刷新...", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, R.string.profile_import_success_refresh,
+                                    Toast.LENGTH_SHORT).show();
                             refresh();
                         } else {
-                            Toast.makeText(this, "导入成功，请重新登录恢复的账号", Toast.LENGTH_LONG).show();
+                            Toast.makeText(this, R.string.profile_import_success_relogin,
+                                    Toast.LENGTH_LONG).show();
                             goToLogin(true);
                         }
                     } else {
-                        Toast.makeText(this, "导入失败，请检查文件格式", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, R.string.profile_import_failed_check_file,
+                                Toast.LENGTH_LONG).show();
                     }
                 });
             } catch (Exception e) {
                 Logger.e("Import failed", e);
                 AppExecutors.main().execute(() -> {
                     if (!isFinishing()) {
-                        Toast.makeText(this, "导入失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(this,
+                                getString(R.string.profile_import_failed_reason, e.getMessage()),
+                                Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -407,7 +417,7 @@ public class ProfileActivity extends Activity {
             boolean success = false;
             try (java.io.OutputStream outputStream = getContentResolver().openOutputStream(uri, "wt")) {
                 if (outputStream == null) {
-                    throw new java.io.IOException("无法写入备份文件");
+                    throw new java.io.IOException(getString(R.string.profile_export_write_failed));
                 }
                 success = dbHelper.exportBackupToStream(outputStream);
             } catch (Exception e) {
@@ -419,9 +429,9 @@ public class ProfileActivity extends Activity {
                     return;
                 }
                 if (exportSuccess) {
-                    Toast.makeText(this, "备份导出成功", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, R.string.profile_export_success, Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(this, "备份导出失败", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, R.string.profile_export_failed, Toast.LENGTH_LONG).show();
                 }
             });
         });
@@ -445,10 +455,4 @@ public class ProfileActivity extends Activity {
         }
     }
 
-    private LinearLayout.LayoutParams topMarginParams(int topMargin) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.topMargin = topMargin;
-        return params;
-    }
 }

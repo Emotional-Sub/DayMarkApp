@@ -105,7 +105,9 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             finish();
             return;
         }
-        welcomeText.setText(username == null ? "我的打卡" : username + " 的打卡");
+        welcomeText.setText(TextUtils.isEmpty(username)
+                ? getString(R.string.main_welcome_default)
+                : getString(R.string.main_welcome_format, username));
 
         // Android 13+ requires an explicit runtime grant before any notification (incl. reminders)
         // can be posted. Ask once on entry; if denied, reminders stay silent but the app still works.
@@ -234,7 +236,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             // 全部模式：显示所有选项包括"自定义（拖拽）"
             sortAdapter = new ArrayAdapter<>(this,
                     android.R.layout.simple_spinner_item,
-                    new String[]{"自定义（拖拽）", "待完成优先", "连续最久", "创建最新"});
+                    getResources().getStringArray(R.array.main_sort_options_all));
             sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             sortSpinner.setAdapter(sortAdapter);
             sortSpinner.setSelection(sortMode, false);
@@ -242,7 +244,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
             // 筛选模式：不显示"自定义（拖拽）"
             sortAdapter = new ArrayAdapter<>(this,
                     android.R.layout.simple_spinner_item,
-                    new String[]{"待完成优先", "连续最久", "创建最新"});
+                    getResources().getStringArray(R.array.main_sort_options_filtered));
             sortAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             sortSpinner.setAdapter(sortAdapter);
             // sortMode - 1 因为跳过了 SORT_CUSTOM(0)
@@ -279,7 +281,8 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         if (requestCode == REQUEST_POST_NOTIFICATIONS
                 && (grantResults.length == 0
                 || grantResults[0] != PackageManager.PERMISSION_GRANTED)) {
-            Toast.makeText(this, "未授予通知权限，打卡提醒将无法弹出", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.main_notification_permission_denied,
+                    Toast.LENGTH_LONG).show();
         }
     }
 
@@ -306,7 +309,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
         // 切换到筛选模式时，自动切换到"待完成优先"排序
         if (mode != 0 && sortMode == SORT_CUSTOM) {
             sortMode = SORT_DUE_FIRST;
-            Toast.makeText(this, "已自动切换到待完成优先排序", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.main_auto_sort_switched, Toast.LENGTH_SHORT).show();
         }
 
         // 更新排序下拉框（根据筛选模式显示不同的选项）
@@ -422,8 +425,7 @@ public class MainActivity extends Activity implements HabitAdapter.HabitActionLi
                 }
                 bestStreak = Math.max(bestStreak, habit.streakDays);
             }
-            String summary = String.format(Locale.CHINA,
-                    "共 %d 个事件，今日完成 %d 个，累计 %d 次，最高连续 %d 天",
+            String summary = getString(R.string.main_summary_format,
                     allHabits.size(), completedToday, totalChecks, bestStreak);
             // Show the editable display name (falls back to the login username) in the greeting,
             // so a nickname changed on the profile page is reflected here after returning.

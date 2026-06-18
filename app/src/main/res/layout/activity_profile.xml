@@ -15,7 +15,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="个人中心"
+            android:text="@string/profile_title"
             android:textAppearance="@style/TextAppearance.DayMark.Headline.Medium" />
 
         <com.google.android.material.card.MaterialCardView
@@ -35,7 +35,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"
-                    android:text="个人信息"
+                    android:text="@string/profile_section_info"
                     android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                 <ImageView
@@ -44,7 +44,7 @@
                     android:layout_height="80dp"
                     android:layout_gravity="center_horizontal"
                     android:background="@drawable/bg_photo"
-                    android:contentDescription="用户头像"
+                    android:contentDescription="@string/profile_avatar_desc"
                     android:scaleType="centerCrop"
                     android:src="@drawable/ic_profile_24" />
 
@@ -72,7 +72,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
                     android:layout_marginTop="12dp"
-                    android:text="编辑资料"
+                    android:text="@string/profile_edit_action"
                     android:textSize="14sp"
                     app:cornerRadius="8dp"
                     app:icon="@drawable/ic_edit_24"
@@ -85,7 +85,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:layout_marginBottom="8dp"
-            android:text="数据概览"
+            android:text="@string/profile_section_overview"
             android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
         <LinearLayout
@@ -112,7 +112,7 @@
                         android:id="@+id/totalEventsText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0"
+                        android:text="@string/common_zero"
                         android:textAppearance="@style/TextAppearance.DayMark.Headline.Large"
                         android:textColor="@color/primary" />
 
@@ -120,7 +120,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="事件总数"
+                        android:text="@string/profile_total_events"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/onSurfaceVariant" />
                 </LinearLayout>
@@ -145,7 +145,7 @@
                         android:id="@+id/todayCompletedText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0"
+                        android:text="@string/common_zero"
                         android:textAppearance="@style/TextAppearance.DayMark.Headline.Large"
                         android:textColor="@color/secondary" />
 
@@ -153,7 +153,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="今日完成"
+                        android:text="@string/profile_today_completed"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/onSurfaceVariant" />
                 </LinearLayout>
@@ -185,7 +185,7 @@
                         android:id="@+id/totalChecksText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0"
+                        android:text="@string/common_zero"
                         android:textAppearance="@style/TextAppearance.DayMark.Headline.Large"
                         android:textColor="@color/tertiary" />
 
@@ -193,7 +193,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="累计打卡"
+                        android:text="@string/profile_total_checks"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/onSurfaceVariant" />
                 </LinearLayout>
@@ -218,7 +218,7 @@
                         android:id="@+id/maxStreakText"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0"
+                        android:text="@string/common_zero"
                         android:textAppearance="@style/TextAppearance.DayMark.Headline.Large"
                         android:textColor="@color/primary" />
 
@@ -226,7 +226,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="最高连续"
+                        android:text="@string/profile_max_streak"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/onSurfaceVariant" />
                 </LinearLayout>
@@ -249,7 +249,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="打卡热力图"
+                    android:text="@string/profile_heatmap_title"
                     android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                 <com.example.daymark.HeatmapView
@@ -270,7 +270,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="少"
+                        android:text="@string/common_less"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/onSurfaceVariant" />
 
@@ -308,7 +308,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="多"
+                        android:text="@string/common_more"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/onSurfaceVariant" />
                 </LinearLayout>
@@ -341,13 +341,13 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="分类统计"
+                        android:text="@string/profile_category_stats_title"
                         android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="查看详情 >"
+                        android:text="@string/profile_view_details"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/primary" />
                 </LinearLayout>
@@ -388,13 +388,13 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="个人勋章"
+                        android:text="@string/profile_achievements_title"
                         android:textAppearance="@style/TextAppearance.DayMark.Title.Medium" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="查看全部 >"
+                        android:text="@string/profile_view_all"
                         android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
                         android:textColor="@color/primary" />
                 </LinearLayout>
@@ -413,7 +413,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:gravity="center"
-                    android:text="还没有获得勋章\n继续努力打卡吧！"
+                    android:text="@string/profile_no_achievements"
                     android:textAppearance="@style/TextAppearance.DayMark.Body.Medium"
                     android:textColor="@color/onSurfaceVariant"
                     android:visibility="gone" />
@@ -424,7 +424,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:text="数据管理"
+            android:text="@string/profile_section_data_management"
             android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
             android:textColor="@color/onSurfaceVariant" />
 
@@ -434,7 +434,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="8dp"
-            android:text="导出备份"
+            android:text="@string/profile_export_backup"
             android:textSize="15sp"
             app:cornerRadius="12dp"
             app:icon="@android:drawable/ic_menu_save"
@@ -447,7 +447,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="8dp"
-            android:text="导入备份"
+            android:text="@string/profile_import_backup"
             android:textSize="15sp"
             app:cornerRadius="12dp"
             app:icon="@android:drawable/ic_menu_upload"
@@ -458,7 +458,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:text="账号设置"
+            android:text="@string/profile_section_account"
             android:textAppearance="@style/TextAppearance.DayMark.Body.Small"
             android:textColor="@color/onSurfaceVariant" />
 
@@ -468,7 +468,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="8dp"
-            android:text="退出登录"
+            android:text="@string/profile_logout"
             android:textSize="15sp"
             app:cornerRadius="12dp" />
 
@@ -478,7 +478,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="8dp"
-            android:text="删除账号"
+            android:text="@string/profile_delete_account"
             android:textSize="15sp"
             app:cornerRadius="12dp"
             app:strokeColor="@color/error" />
@@ -489,7 +489,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="18dp"
-            android:text="返回"
+            android:text="@string/common_back"
             android:textSize="15sp"
             app:cornerRadius="12dp" />
     </LinearLayout>
